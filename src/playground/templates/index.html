@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PHP Playground in Rust</title>
+    <style>
+        /* General Layout */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+            overflow: hidden;
+        }
+
+        /* Container */
+        .container {
+            width: 90%;
+            max-width: 800px;
+            background: #ffffff;
+            box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #4a90e2;
+        }
+
+        /* Textarea Styling */
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        /* Button Styling */
+        button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 5px;
+        }
+
+        button:hover {
+            background-color: #357ab7;
+        }
+
+        /* Output Styling */
+        pre#output {
+            width: 100%;
+            background-color: #f9f9f9;
+            color: #333;
+            padding: 15px;
+            font-size: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+            text-align: left;
+            min-height: 50px;
+            box-sizing: border-box;
+            overflow-x: auto; /* Prevents overflow from large text */
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* Response Time Styling */
+        .response-time {
+            color: #888;
+            font-size: 14px;
+            margin-top: 5px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>PHP Playground in Rust</h1>
+    <textarea id="php-code" placeholder="Write your PHP code here...">echo 'Hello, World!';</textarea>
+    <button onclick="executeCode()">Run Code</button>
+    <pre id="output">Output will appear here...</pre>
+    <div id="response-time" class="response-time"></div>
+</div>
+
+<script>
+    async function executeCode() {
+        const code = document.getElementById("php-code").value;
+
+        try {
+            const response = await fetch('/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(code)
+            });
+
+            const result = await response.json();
+
+            // Display server output and response time in microseconds
+            document.getElementById("output").innerText = result.output;
+            document.getElementById("response-time").innerText = `Response time: ${result.response_time} µs`;
+        } catch (error) {
+            console.error("Error fetching response:", error);
+            document.getElementById("output").innerText = "An error occurred while executing the code.";
+        }
+    }
+</script>
+</body>
+</html>
