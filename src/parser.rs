@@ -12,6 +12,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Node, String> {
 fn parse_statement(iter: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Node, String> {
     match iter.next() {
         Some(Token::Echo) => parse_echo(iter),
+        Some(Token::Print) => parse_echo(iter),
         Some(Token::If) => parse_if_statement(iter),
         Some(Token::While) => parse_while_statement(iter),
         Some(Token::For) => parse_for_statement(iter),
@@ -23,6 +24,15 @@ fn parse_statement(iter: &mut Peekable<impl Iterator<Item = Token>>) -> Result<N
 
 // Parse an `echo` statement
 fn parse_echo(iter: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Node, String> {
+    if let Some(Token::String(content)) = iter.next() {
+        if let Some(Token::Semicolon) = iter.next() {
+            return Ok(Node::Echo(content));
+        }
+    }
+    Err("Syntax error in echo statement".to_string())
+}
+
+fn parse_print(iter: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Node, String> {
     if let Some(Token::String(content)) = iter.next() {
         if let Some(Token::Semicolon) = iter.next() {
             return Ok(Node::Echo(content));
