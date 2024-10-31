@@ -1,30 +1,41 @@
+// interpreter.rs
+
 use crate::ast::{Node, Operator};
+use std::collections::HashMap;
 
-pub fn execute(node: Node) -> Result<String, String> {
+pub fn execute(node: Node, context: &mut HashMap<String, f64>, string_context: &mut HashMap<String, String>) -> Result<String, String> {
     let mut output = String::new();
-
     match node {
+        Node::Block(statements) => {
+            for statement in statements {
+                output.push_str(&statement.execute(context, string_context));
+                output.push('\n');
+            }
+        }
         Node::Echo(content) => {
-            output.push_str(&content);
+            output.push_str(&content.evaluate_as_string(context, string_context));
         }
         Node::Print(content) => {
-            output.push_str(&content);
+            output.push_str(&content.evaluate_as_string(context, string_context));
         }
         Node::VariableAssignment(name, value) => {
-            output.push_str(&format!("Assign {} to variable ${}", value.execute(), name));
-        }
-        Node::Variable(name) => {
-            output.push_str(&format!("Retrieve value of variable ${}", name));
-        }
-        Node::Number(value) => {
-            output.push_str(&value.to_string());
-        }
-        Node::StringLiteral(content) => {
-            output.push_str(&content);
+            match *value {
+                Node::Number(num) => {
+                    context.insert(name.clone(), num);
+                    println!("Debug: Assigned numeric value {} to variable ${}", num, name);
+                    output.push_str(&format!("Assigned {} to variable ${}", num, name));
+                }
+                Node::StringLiteral(ref s) => {
+                    string_context.insert(name.clone(), s.clone());
+                    println!("Debug: Assigned string value '{}' to variable ${}", s, name);
+                    output.push_str(&format!("Assigned '{}' to variable ${}", s, name));
+                }
+                _ => output.push_str("Invalid assignment"),
+            }
         }
         Node::BinaryOperation(left, op, right) => {
-            let left_val = left.execute().parse::<f64>().unwrap_or(0.0);
-            let right_val = right.execute().parse::<f64>().unwrap_or(0.0);
+            let left_val = left.evaluate(context, string_context );
+            let right_val = right.evaluate(context, string_context);
             let result = match op {
                 Operator::Add => left_val + right_val,
                 Operator::Subtract => left_val - right_val,
@@ -36,29 +47,11 @@ pub fn execute(node: Node) -> Result<String, String> {
                         return Err("Error: Division by zero".to_string());
                     }
                 }
+                _ => return Err("Unsupported operator".to_string()),
             };
             output.push_str(&result.to_string());
         }
-        Node::If(condition, then_branch, else_branch) => {
-            let condition_result = condition.execute().parse::<f64>().unwrap_or(0.0);
-            if condition_result != 0.0 {
-                output.push_str(&then_branch.execute());
-            } else if let Some(else_node) = else_branch {
-                output.push_str(&else_node.execute());
-            }
-        }
-        Node::While(condition, body) => {
-            while condition.execute().parse::<f64>().unwrap_or(0.0) != 0.0 {
-                output.push_str(&body.execute());
-            }
-        }
-        Node::For(init, condition, increment, body) => {
-            init.execute();
-            while condition.execute().parse::<f64>().unwrap_or(0.0) != 0.0 {
-                output.push_str(&body.execute());
-                increment.execute();
-            }
-        }
+        _ => output.push_str("Unknown command"),
     }
 
     Ok(output)

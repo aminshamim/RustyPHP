@@ -1,4 +1,8 @@
-#[derive(Debug, PartialEq, Clone)]
+// lexer.rs
+
+use serde::Serialize;
+
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum Token {
     PhpOpen,
     PhpClose,
@@ -21,10 +25,11 @@ pub enum Token {
     Minus,
     Multiply,
     Divide,
+    Dot, // Token for concatenation
     EOF,
 }
 
-pub fn lex(input: &str) -> Vec<Token> {
+pub fn lex(input: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = input.chars().peekable();
 
@@ -42,52 +47,33 @@ pub fn lex(input: &str) -> Vec<Token> {
                     tokens.push(Token::PhpClose);
                 }
             }
-            'e' if chars.clone().collect::<String>().starts_with("echo") => {
-                chars.by_ref().take(4).for_each(drop); // Move forward
-                tokens.push(Token::Echo);
+            'e' => {
+                let next: String = chars.clone().take(4).collect();
+                if next == "echo" {
+                    chars.by_ref().take(4).for_each(drop);
+                    tokens.push(Token::Echo);
+                } else if next == "else" {
+                    chars.by_ref().take(4).for_each(drop);
+                    tokens.push(Token::Else);
+                } else {
+                    return Err("Unexpected token: expected 'echo' or 'else'".to_string());
+                }
             }
             'p' => {
-                let keyword: String = chars.by_ref().take(5).collect();
-                if keyword == "print" {
+                let next: String = chars.clone().take(5).collect();
+                if next == "print" {
+                    chars.by_ref().take(5).for_each(drop);
                     tokens.push(Token::Print);
-                }
-            }
-            'i' => {
-                let keyword: String = chars.by_ref().take(2).collect();
-                if keyword == "if" {
-                    tokens.push(Token::If);
-                }
-            }
-            'e' => {
-                let keyword: String = chars.by_ref().take(4).collect();
-                if keyword == "else" {
+                } else if next == "else" {
+                    chars.by_ref().take(5).for_each(drop);
                     tokens.push(Token::Else);
+                } else {
+                    return Err("Unexpected token: expected 'echo' or 'else'".to_string());
                 }
             }
-            'w' => {
-                let keyword: String = chars.by_ref().take(5).collect();
-                if keyword == "while" {
-                    tokens.push(Token::While);
-                }
-            }
-            'f' => {
-                let keyword: String = chars.by_ref().take(3).collect();
-                if keyword == "for" {
-                    tokens.push(Token::For);
-                }
-            }
-            '$' => {
-                chars.next(); // Skip '$'
-                let mut var_name = String::new();
-                while let Some(&ch) = chars.peek() {
-                    if ch.is_alphanumeric() || ch == '_' {
-                        var_name.push(ch);
-                        chars.next();
-                    } else {
-                        break;
-                    }
-                }
-                tokens.push(Token::Variable(var_name));
+            '.' => {
+                tokens.push(Token::Dot); // Add support for Dot token
+                chars.next();
             }
             '=' => {
                 tokens.push(Token::Equals);
@@ -159,6 +145,19 @@ pub fn lex(input: &str) -> Vec<Token> {
             _ if c.is_whitespace() => {
                 chars.next();
             }
+            '$' => {
+                chars.next(); // Skip '$'
+                let mut var_name = String::new();
+                while let Some(&ch) = chars.peek() {
+                    if ch.is_alphanumeric() || ch == '_' {
+                        var_name.push(ch);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                tokens.push(Token::Variable(var_name));
+            }
             _ => {
                 chars.next();
             }
@@ -166,5 +165,5 @@ pub fn lex(input: &str) -> Vec<Token> {
     }
 
     tokens.push(Token::EOF);
-    tokens
+    Ok(tokens)
 }
