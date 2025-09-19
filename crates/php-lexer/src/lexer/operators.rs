@@ -14,13 +14,16 @@ use crate::token::Token;
 pub struct OperatorHandler;
 
 impl OperatorHandler {
-    /// Tokenize equals or double equals
+    /// Tokenize equals, double equals, or arrow operator
     pub fn tokenize_equals(stream: &mut CharStream) -> LexResult<Token> {
         stream.next(); // consume '='
         
         if let Some(&'=') = stream.peek() {
             stream.next(); // consume second '='
             Ok(Token::DoubleEquals)
+        } else if let Some(&'>') = stream.peek() {
+            stream.next(); // consume '>'
+            Ok(Token::Arrow)
         } else {
             Ok(Token::Equals)
         }
@@ -79,17 +82,28 @@ impl OperatorHandler {
         }
     }
 
-    /// Tokenize PHP closing tag
+    /// Tokenize PHP closing tag or question mark
     pub fn try_php_close(stream: &mut CharStream) -> LexResult<Token> {
-        // Check for ?>
-        if stream.peek_ahead(1).chars().next() == Some('>') {
+        // Need to examine two characters including current one
+        let two = stream.peek_ahead(2);
+        if two == "??" {
+            stream.next(); // '?'
+            stream.next(); // second '?'
+            return Ok(Token::NullCoalescing);
+        }
+        if two == "?>" {
             stream.next(); // '?'
             stream.next(); // '>'
-            Ok(Token::PhpClose)
-        } else {
-            // Just '?' - not implemented as operator yet
-            stream.next();
-            Ok(Token::PhpClose) // Placeholder for now
+            return Ok(Token::PhpClose);
         }
+        // Fallback single '?'
+        stream.next();
+        Ok(Token::QuestionMark)
+    }
+
+    /// Tokenize colon
+    pub fn tokenize_colon(stream: &mut CharStream) -> LexResult<Token> {
+        stream.next(); // consume ':'
+        Ok(Token::Colon)
     }
 }

@@ -49,6 +49,13 @@ pub enum Expr {
         /// Index expression
         index: Box<Expr>,
     },
+    /// Null coalescing expression: left ?? right
+    NullCoalesce {
+        /// Left expression
+        left: Box<Expr>,
+        /// Right expression
+        right: Box<Expr>,
+    },
 }
 
 /// Array element in array literal
@@ -92,6 +99,7 @@ impl fmt::Display for Expr {
                 write!(f, "]")
             }
             Expr::ArrayAccess { array, index } => write!(f, "{}[{}]", array, index),
+            Expr::NullCoalesce { left, right } => write!(f, "({} ?? {})", left, right),
         }
     }
 }

@@ -55,12 +55,50 @@ pub enum Stmt {
         /// Loop body
         body: Box<Stmt>,
     },
+    /// Foreach loop: foreach ($array as $item) { ... } or foreach ($array as $key => $value) { ... }
+    Foreach {
+        /// Array expression to iterate over
+        array: Expr,
+        /// Variable name for the value (always present)
+        value_var: String,
+        /// Optional variable name for the key
+        key_var: Option<String>,
+        /// Loop body
+        body: Box<Stmt>,
+    },
     /// Return statement: return $value;
     Return(Option<Expr>),
     /// Break statement: break;
     Break,
     /// Continue statement: continue;
     Continue,
+    /// Function definition: function name($param1, $param2) { ... }
+    FunctionDefinition {
+        /// Function name
+        name: String,
+        /// Parameters
+        parameters: Vec<String>,
+        /// Function body
+        body: Box<Stmt>,
+    },
+    /// Switch statement: switch(expr) { case v: ... break; default: ... }
+    Switch {
+        /// Discriminant expression
+        expression: Expr,
+        /// Cases
+        cases: Vec<SwitchCase>,
+        /// Optional default block
+        default: Option<Vec<Stmt>>,
+    },
+}
+
+/// Single switch case
+#[derive(Debug, Clone, PartialEq)]
+pub struct SwitchCase {
+    /// Case match expression
+    pub value: Expr,
+    /// Statements in this case until break/next case
+    pub statements: Vec<Stmt>,
 }
 
 impl fmt::Display for Stmt {
@@ -95,6 +133,13 @@ impl fmt::Display for Stmt {
                 if let Some(increment) = increment { write!(f, "{}", increment)?; }
                 write!(f, ") {}", body)
             }
+            Stmt::Foreach { array, value_var, key_var, body } => {
+                write!(f, "foreach ({} as ", array)?;
+                if let Some(key_var) = key_var {
+                    write!(f, "${} => ", key_var)?;
+                }
+                write!(f, "${}) {}", value_var, body)
+            }
             Stmt::Return(expr) => {
                 write!(f, "return")?;
                 if let Some(expr) = expr {
@@ -104,6 +149,30 @@ impl fmt::Display for Stmt {
             }
             Stmt::Break => write!(f, "break;"),
             Stmt::Continue => write!(f, "continue;"),
+            Stmt::FunctionDefinition { name, parameters, body } => {
+                write!(f, "function {}(", name)?;
+                for (i, param) in parameters.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    write!(f, "${}", param)?;
+                }
+                write!(f, ") {}", body)
+            }
+            Stmt::Switch { expression, cases, default } => {
+                writeln!(f, "switch ({}) {{", expression)?;
+                for case in cases {
+                    writeln!(f, "  case {}:", case.value)?;
+                    for stmt in &case.statements {
+                        writeln!(f, "    {}", stmt)?;
+                    }
+                }
+                if let Some(default_stmts) = default {
+                    writeln!(f, "  default:")?;
+                    for stmt in default_stmts {
+                        writeln!(f, "    {}", stmt)?;
+                    }
+                }
+                write!(f, "}}")
+            }
         }
     }
 }

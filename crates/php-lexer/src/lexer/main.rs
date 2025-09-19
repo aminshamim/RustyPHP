@@ -116,9 +116,25 @@ impl<'a> Lexer<'a> {
             '>' => OperatorHandler::tokenize_greater_than(&mut self.stream),
             '!' => OperatorHandler::tokenize_not_equals(&mut self.stream),
             
-            // Single character tokens
-            '+' => { self.stream.next(); Ok(Token::Plus) }
-            '-' => { self.stream.next(); Ok(Token::Minus) }
+            // Single character tokens with potential multi-character variants
+            '+' => {
+                self.stream.next(); // consume '+'
+                if let Some(&'+') = self.stream.peek() {
+                    self.stream.next(); // consume second '+'
+                    Ok(Token::Increment)
+                } else {
+                    Ok(Token::Plus)
+                }
+            }
+            '-' => {
+                self.stream.next(); // consume '-'
+                if let Some(&'-') = self.stream.peek() {
+                    self.stream.next(); // consume second '-'
+                    Ok(Token::Decrement)
+                } else {
+                    Ok(Token::Minus)
+                }
+            }
             '*' => { self.stream.next(); Ok(Token::Multiply) }
             '/' => { 
                 // This should only be reached if it's not a comment
@@ -126,6 +142,7 @@ impl<'a> Lexer<'a> {
                 Ok(Token::Divide) 
             }
             '.' => { self.stream.next(); Ok(Token::Dot) }
+            ':' => OperatorHandler::tokenize_colon(&mut self.stream),
             ';' => { self.stream.next(); Ok(Token::Semicolon) }
             ',' => { self.stream.next(); Ok(Token::Comma) }
             '(' => { self.stream.next(); Ok(Token::OpenParen) }

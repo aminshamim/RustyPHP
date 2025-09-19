@@ -2,7 +2,7 @@
 # RustyPHP 🦀
 
 <div align="center">
-  <img src="assets/logo.jpeg" alt="RustyPHP Logo" width="200" />
+  <img src="assets/logo.jpeg" alt="RustyPHP Banner with Logo" width="100%" />
 </div>
 
 A complete PHP implementation in Rust, designed for performance, safety, and compatibility.
@@ -76,43 +76,89 @@ cargo test --workspace
 
 ### ✅ **Fully Implemented & Tested**
 #### **Lexical Analysis (php-lexer)**
-- ✅ **PHP Tags**: `<?php` and `?>` recognition
-- ✅ **Variables**: `$variable` tokenization
-- ✅ **Literals**: Numbers (integers/floats), strings (single/double quoted)
-- ✅ **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`<`, `>`, `=`, `==`, `!=`)
-- ✅ **Keywords**: `echo`, `print`, `if`, `else`, `while`, `return`, `true`, `false`, `null`
-- ✅ **Punctuation**: Semicolons, parentheses, braces, brackets, commas
-- ✅ **Comments**: Single-line (`//`) and multi-line (`/* */`) support
+* ✅ PHP Tags: `<?php`, `?>`
+* ✅ Variables: `$variable`
+* ✅ Literals: Numbers (int/float), strings ("double" with interpolation, 'single')
+* ✅ Operators: Arithmetic `+ - * /`, comparison `< > <= >= == !=`, assignment `=`, concatenation `.`, increment/decrement `++ --`, null coalescing `??`
+* ✅ Keywords: `echo`, `print`, `if`, `else`, `elseif`, `while`, `for`, `foreach`, `switch`, `case`, `default`, `break`, `continue`, `function`, `return`, `true`, `false`, `null`
+* ✅ Punctuation: `; , ( ) { } [ ] =>`
+* ✅ Comments: `//`, `#`, `/* */`
 
 #### **Syntax Parsing (php-parser)**
-- ✅ **Expressions**: Binary operations with proper precedence (`2 + 3 * 4`)
-- ✅ **Statements**: Variable assignments (`$x = 5`), echo statements
-- ✅ **Control Flow**: If statements, while loops (basic structure)
-- ✅ **Constants**: Constant definitions and references
-- ✅ **String Concatenation**: Dot operator (`.`) support
-- ✅ **AST Generation**: Complete Abstract Syntax Tree creation
+* ✅ Expressions: Precedence climbing (handles `2 + 3 * 4` correctly)
+* ✅ Array Literals: `[1, 2, "a" => 3]`
+* ✅ Array Access Chains: `$arr[0]["key"]`
+* ✅ Assignments & Echo/Print
+* ✅ Control Flow: `if / elseif / else`, `while`, `for(init;cond;inc)`, `foreach ($arr as $v)` & `foreach ($arr as $k => $v)`
+* ✅ Switch/Case/Default with break handling
+* ✅ Function Definitions & Calls (positional params)
+* ✅ Constants: `define("NAME", value)` and `const NAME = value;`
+* ✅ Null Coalescing: `$a ?? $b`
+* ✅ Postfix Increment/Decrement parsing
+* ✅ String Interpolation Support (parsed as plain strings; interpolation applied at runtime)
+* ✅ AST kept pure (no execution logic)
 
-#### **Runtime & Testing**
-- ✅ **Comprehensive Test Suite**: 16/16 tests passing across all components
-- ✅ **Integration Tests**: Lexer (6 tests) + Parser (13 tests) fully validated
-- ✅ **Multi-crate Architecture**: 8 specialized crates working together
-- ✅ **Test Organization**: Structured test files and debug infrastructure
-- ✅ **Documentation**: Complete API docs and usage examples
+#### **Runtime (php-runtime)**
+* ✅ Variable storage and lookup (undefined vars => `null` behavior)
+* ✅ Constant definition storage
+* ✅ Expression evaluation: arithmetic, comparison, concatenation, null coalescing
+* ✅ Control flow execution: if/else, while, for, foreach, switch (with break/continue)
+* ✅ Function invocation (user-defined) with isolated scope & simple return handling
+* ✅ Arrays: indexed & associative insert, access, auto-increment keys
+* ✅ Array access evaluation with graceful `null` on missing index
+* ✅ Superglobal bootstrap (minimal `$_GET` placeholder)
+* ✅ Postfix `++` / `--` semantics
+* ✅ Simple double-quoted string variable interpolation
+
+#### **Testing & Tooling**
+* ✅ Organized integration tests & PHP file based scenarios
+* ✅ Debug utilities (token dump earlier used; now cleaned)
+* ✅ Modular crate boundaries respected
+* ✅ Build & test scripts (`scripts/test_all.sh`)
+
+#### **Recently Added (Since Initial README Draft)**
+> Arrays, array access, foreach, for loops, switch/case/default, break/continue control flow signals, user functions, null coalescing, string interpolation, postfix inc/dec.
 
 ### 🚧 **In Active Development**
-- **Runtime Engine**: Variable storage and expression evaluation
-- **Type System**: PHP's dynamic typing with Rust safety
-- **Enhanced Error Handling**: Comprehensive error reporting
-- **Standard Library**: Built-in functions (in-progress)
+* Enriched Runtime semantics (logical operators & strict comparisons upcoming)
+* Type System refinements (truthiness & coercions expansion)
+* Enhanced Error Reporting (line/column propagation across crates)
+* Standard Library bootstrap (planned migration of built-ins like `count`, `strlen`)
 
 ### 📅 **Planned Features** (see [ROADMAP.md](ROADMAP.md))
-- **Advanced Control Flow**: foreach, switch/case, try/catch
-- **Object-Oriented Programming**: Classes, interfaces, traits
-- **Functions**: User-defined functions and closures
-- **Arrays**: Associative and indexed arrays
-- **Standard Library**: Complete PHP 8.x function compatibility
-- **Web Server Integration**: Built-in development server
-- **Extension System**: Dynamic library loading
+* Advanced Control Flow: try/catch/finally, ternary `?:`, Elvis `?:` nuance, match (PHP 8)
+* Object-Oriented Programming: classes, interfaces, traits, visibility, static
+* Functions: default params, variadics, by-reference params, closures/anonymous functions
+* Strict & Identity Comparisons: `===`, `!==`
+* Logical Operators: `&&`, `||`, `!`
+* Remaining Operators: modulo `%`, assignment compound ops `+= -= *= .=`
+* Arrays: spread, nested destructuring (later phase), by-reference foreach
+* Standard Library: Core PHP 8.x coverage
+* Web Server Integration: basic SAPI simulation & request globals population
+* Extension System: FFI layer & dynamic loading
+* Error Handling: exceptions, stack traces
+* Performance: opcode-like intermediate representation (future optimization phase)
+
+### ⚠️ Current Limitations
+| Area | Missing / Partial |
+|------|-------------------|
+| Operators | `===`, `!==`, `%`, `&&`, `||`, `!`, compound assignments, ternary `?:` |
+| Types | Objects (stub only), resources (placeholder), no references | 
+| Functions | No default params, no closures, no variadics, no recursion tests yet |
+| Arrays | No nested modification semantics (write-through on access), no spread, no unset | 
+| Strings | Interpolation is simple (no complex `{}` or array deref) |
+| Error Handling | No exceptions, minimal error context | 
+| OOP | Classes/interfaces/traits not executed (parsing not yet started) |
+| Stdlib | Built-ins not yet implemented beyond `define` handling | 
+| I/O | No file/network APIs | 
+| Security | No sandboxing / open_basedir equivalents |
+
+### 🔍 Near-Term Focus (Next Iteration Targets)
+1. Logical operators & strict comparison tokens
+2. Modulo operator end-to-end
+3. Ternary conditional expression parsing/execution
+4. Function return value propagation refinements & early `return` inside nested blocks
+5. Basic exception scaffolding (enum + placeholder throw)
 
 ## 🧪 Examples
 
@@ -151,6 +197,36 @@ if ($age >= 18) {
 **Status**: ✅ **Lexed and Parsed** (Runtime implementation in progress)
 
 #### **Multiple Statements**
+#### **Composite Example (Current Engine Capabilities)**
+```php
+<?php
+define("APP", "RustyPHP");
+const MAX = 3;
+
+$numbers = [1, 2, 3, "label" => 4];
+
+function sum($a, $b) { return $a + $b; }
+
+for ($i = 0; $i < MAX; $i++) {
+       echo "Loop $i: ";
+       echo sum($i, $numbers[$i]);
+}
+
+foreach ($numbers as $k => $v) {
+       echo "Key $k => $v"; 
+}
+
+$name = "Amin";
+echo "Hello $name";          // Interpolation
+echo $maybe ?? "fallback";    // Null coalescing
+
+switch ($name) {
+       case "Amin": echo "Matched"; break;
+       default: echo "No match"; break;
+}
+?>
+```
+**Demonstrated**: constants, arrays, for/foreach, functions, arithmetic, array access, string interpolation, null coalescing, switch, break.
 ```php
 <?php
 $name = "Alice";
@@ -243,7 +319,7 @@ RustyPHP/
 | **php-lexer** | ✅ **Complete** | 6/6 passing | Token recognition, comments, operators |
 | **php-parser** | ✅ **Complete** | 13/13 passing | AST generation, expressions, statements |
 | **php-types** | 🚧 In Progress | Basic structure | Type definitions |
-| **php-runtime** | 🚧 In Progress | Basic structure | Variable storage |
+| **php-runtime** | 🚧 In Progress | Expanding | Control flow, arrays, functions |
 | **php-stdlib** | 📅 Planned | - | Built-in functions |
 | **php-cli** | 📅 Planned | - | Command-line interface |
 | **php-web** | 📅 Planned | - | Web server integration |
@@ -253,19 +329,21 @@ RustyPHP/
 
 | Phase | Duration | Goal | Status |
 |-------|----------|------|--------|
-| **Phase 1** | Months 1-3 | Foundation & Architecture | ✅ **75% Complete** |
+| **Phase 1** | Months 1-3 | Foundation & Architecture | ✅ **~85% Complete** |
 | **Phase 2** | Months 4-6 | Core Runtime | � **25% Complete** |
 | **Phase 3** | Months 7-9 | Advanced Features & OOP | 📅 Planned |
 | **Phase 4** | Months 10-12 | Standard Library | 📅 Planned |
 | **Phase 5** | Months 13-15 | Web & Performance | 📅 Planned |
 | **Phase 6** | Months 16-18 | Production & Ecosystem | 📅 Planned |
 
-### **Phase 1 Achievements** ✅
-- ✅ Multi-crate architecture established
-- ✅ Complete lexical analysis system  
-- ✅ Complete syntax parsing system
-- ✅ Comprehensive testing infrastructure (16 tests)
-- ✅ Documentation and development workflows
+### **Phase 1 Achievements (Expanded)** ✅
+* ✅ Multi-crate architecture established
+* ✅ Lexer: tags, identifiers, literals, operators (extended set), comments
+* ✅ Parser: precedence climbing, arrays, foreach, switch, functions
+* ✅ Runtime: variable storage, arrays, control flow, functions, basic evaluation
+* ✅ Testing infrastructure (file-based + crate tests)
+* ✅ Initial string interpolation & null coalescing
+* ✅ Clean separation of concerns (no execution logic in AST)
 
 See [ROADMAP.md](ROADMAP.md) for detailed milestones and deliverables.
 

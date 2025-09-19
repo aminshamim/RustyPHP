@@ -72,19 +72,48 @@ impl Parser {
             Some(Token::Print) => StatementParser::parse_print(tokens, position),
             Some(Token::Variable(_)) => StatementParser::parse_assignment_or_expression(tokens, position),
             Some(Token::Const) => StatementParser::parse_const(tokens, position),
+            Some(Token::Function) => StatementParser::parse_function_definition(tokens, position),
             Some(Token::If) => ControlFlowParser::parse_if(tokens, position),
             Some(Token::While) => ControlFlowParser::parse_while(tokens, position),
             Some(Token::For) => ControlFlowParser::parse_for(tokens, position),
+            Some(Token::Foreach) => ControlFlowParser::parse_foreach(tokens, position),
             Some(Token::Return) => ControlFlowParser::parse_return(tokens, position),
             Some(Token::Break) => ControlFlowParser::parse_break(tokens, position),
             Some(Token::Continue) => ControlFlowParser::parse_continue(tokens, position),
+            Some(Token::Switch) => ControlFlowParser::parse_switch(tokens, position),
+            Some(Token::OpenBrace) => Self::parse_block_statement(tokens, position),
             _ => StatementParser::parse_expression_statement(tokens, position),
         }
+    }
+
+    /// Parse a block statement: { stmt1; stmt2; ... }
+    pub fn parse_block_statement(
+        tokens: &mut Peekable<IntoIter<Token>>,
+        position: &mut usize,
+    ) -> ParseResult<Stmt> {
+        // Consume opening brace
+        if let Some(Token::OpenBrace) = tokens.peek() {
+            super::utils::ParserUtils::next_token(tokens, position);
+        }
+
+        let mut statements = Vec::new();
+        
+        while let Some(token) = tokens.peek() {
+            match token {
+                Token::CloseBrace => {
+                    super::utils::ParserUtils::next_token(tokens, position); // consume '}'
+                    break;
+                }
+                Token::EOF => break,
+                _ => statements.push(Self::parse_statement_with_tokens(tokens, position)?),
+            }
+        }
+
+        Ok(Stmt::Block(statements))
     }
 }
 
 // Legacy parser support - this will be removed in the future
-use crate::error::ParseError;
 
 /// Legacy AST node for backwards compatibility
 #[derive(Debug, Clone)]

@@ -29,7 +29,7 @@ fn main() {
     };
     
     // Tokenize
-    let tokens = match php_lexer::Lexer::new(&content).tokenize() {
+    let tokens = match php_lexer::lex(&content) {
         Ok(tokens) => tokens,
         Err(e) => {
             eprintln!("Lexer error: {}", e);
