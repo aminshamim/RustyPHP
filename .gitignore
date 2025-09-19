@@ -36,3 +36,7 @@ npm-debug.log*
 # Logs and temporary files
 *.log
 *.tmp
+
+# Internal AI assistant context (not for commit)
+.copilot/
+php-src/

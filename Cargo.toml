@@ -1,14 +1,71 @@
 
-[package]
-name = "php_in_rust"
+[workspace]
+members = [
+    "crates/php-lexer",
+    "crates/php-parser", 
+    "crates/php-types",
+    "crates/php-runtime",
+    "crates/php-stdlib",
+    "crates/php-cli",
+    "crates/php-web",
+    "crates/php-ffi",
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
+authors = ["RustyPHP Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aminshamim/RustyPHP"
+homepage = "https://github.com/aminshamim/RustyPHP"
+description = "A complete PHP implementation in Rust"
+keywords = ["php", "interpreter", "language", "runtime"]
+categories = ["compilers", "web-programming"]
 
-[dependencies]
+[workspace.dependencies]
+# Core dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# Web framework
 actix-web = "4"
 tera = "1.12.0"
-serde = { version = "1.0", features = ["derive"] }
-env_logger = "0.11.5"
+
+# CLI tools
+clap = { version = "4.0", features = ["derive"] }
+
+# Logging
 log = "0.4"
-serde_json = "1.0.132"
+env_logger = "0.11"
+
+# Testing
+criterion = "0.5"
+
+# Parsing utilities
+nom = "7.1"
+logos = "0.13"
+
+# Foreign function interface
+libloading = "0.8"
+
+# Regex
+regex = "1.10"
+
+# Database (for PDO)
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "mysql", "postgres", "sqlite"] }
+
+# HTTP client (for cURL)
+reqwest = { version = "0.11", features = ["json"] }
+
+# JSON processing
+simd-json = "0.13"
+
+# Performance
+mimalloc = "0.1"
 
