@@ -106,7 +106,7 @@ kill_port() {
     
     # Verify port is free
     if command -v lsof >/dev/null 2>&1; then
-      remaining=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | wc -l || echo "0")
+      remaining=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | wc -l | tr -d ' \n' || echo "0")
       if [[ $remaining -gt 0 ]]; then
         warn "Some processes may still be using port ${port}"
       else
