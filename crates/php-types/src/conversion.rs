@@ -103,3 +103,61 @@ pub fn php_concatenate(left: &PhpValue, right: &PhpValue) -> PhpValue {
     let right_str = right.to_string();
     PhpValue::String(format!("{}{}", left_str, right_str))
 }
+
+/// Perform PHP-style equality comparison
+pub fn php_equals(left: &PhpValue, right: &PhpValue) -> bool {
+    match (left, right) {
+        // Same types - direct comparison
+        (PhpValue::Null, PhpValue::Null) => true,
+        (PhpValue::Bool(a), PhpValue::Bool(b)) => a == b,
+        (PhpValue::Int(a), PhpValue::Int(b)) => a == b,
+        (PhpValue::Float(a), PhpValue::Float(b)) => a == b,
+        (PhpValue::String(a), PhpValue::String(b)) => a == b,
+        
+        // Numeric comparisons
+        (PhpValue::Int(a), PhpValue::Float(b)) => *a as f64 == *b,
+        (PhpValue::Float(a), PhpValue::Int(b)) => *a == *b as f64,
+        
+        // Type juggling - convert both to comparable type
+        _ => {
+            // PHP's equality is complex, simplified version here
+            left.to_string() == right.to_string()
+        }
+    }
+}
+
+/// Perform PHP-style less than comparison
+pub fn php_less_than(left: &PhpValue, right: &PhpValue) -> bool {
+    match (left, right) {
+        // Numeric comparisons
+        (PhpValue::Int(a), PhpValue::Int(b)) => a < b,
+        (PhpValue::Float(a), PhpValue::Float(b)) => a < b,
+        (PhpValue::Int(a), PhpValue::Float(b)) => (*a as f64) < *b,
+        (PhpValue::Float(a), PhpValue::Int(b)) => *a < (*b as f64),
+        
+        // String comparisons
+        (PhpValue::String(a), PhpValue::String(b)) => a < b,
+        
+        // Type juggling - convert to numbers for comparison
+        _ => {
+            let a = left.to_float();
+            let b = right.to_float();
+            a < b
+        }
+    }
+}
+
+/// Perform PHP-style less than or equal comparison
+pub fn php_less_than_or_equal(left: &PhpValue, right: &PhpValue) -> bool {
+    php_less_than(left, right) || php_equals(left, right)
+}
+
+/// Perform PHP-style greater than comparison
+pub fn php_greater_than(left: &PhpValue, right: &PhpValue) -> bool {
+    !php_less_than_or_equal(left, right)
+}
+
+/// Perform PHP-style greater than or equal comparison
+pub fn php_greater_than_or_equal(left: &PhpValue, right: &PhpValue) -> bool {
+    !php_less_than(left, right)
+}

@@ -20,8 +20,10 @@ impl KeywordHandler {
         keywords.insert("print", Token::Print);
         keywords.insert("if", Token::If);
         keywords.insert("else", Token::Else);
+        keywords.insert("elseif", Token::ElseIf);
         keywords.insert("while", Token::While);
         keywords.insert("for", Token::For);
+        keywords.insert("foreach", Token::Foreach);
         keywords.insert("function", Token::Function);
         keywords.insert("return", Token::Return);
         keywords.insert("class", Token::Class);
@@ -34,6 +36,7 @@ impl KeywordHandler {
         keywords.insert("static", Token::Static);
         keywords.insert("var", Token::Var);
         keywords.insert("const", Token::Const);
+        keywords.insert("as", Token::As);
         keywords.insert("true", Token::True);
         keywords.insert("false", Token::False);
         keywords.insert("null", Token::Null);

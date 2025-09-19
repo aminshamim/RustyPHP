@@ -14,8 +14,10 @@ pub enum Token {
     Print,
     If,
     Else,
+    ElseIf,
     While,
     For,
+    Foreach,
     Function,
     Return,
     Class,
@@ -28,6 +30,7 @@ pub enum Token {
     Static,
     Var,
     Const,
+    As,
     True,
     False,
     Null,
@@ -63,6 +66,7 @@ pub enum Token {
     Equals,
     DoubleEquals,
     NotEquals,
+    Arrow, // =>
     LessThan,
     GreaterThan,
     LessOrEqual,
@@ -72,6 +76,11 @@ pub enum Token {
     Multiply,
     Divide,
     Dot,
+    Colon,
+    QuestionMark,
+    NullCoalescing, // ??
+    Increment, // ++
+    Decrement, // --
     
     // Punctuation
     Semicolon,
@@ -91,7 +100,7 @@ impl Token {
     /// Returns true if this token represents a keyword
     pub fn is_keyword(&self) -> bool {
         matches!(self, 
-            Token::Echo | Token::Print | Token::If | Token::Else |
+            Token::Echo | Token::Print | Token::If | Token::Else | Token::ElseIf |
             Token::While | Token::For | Token::Function | Token::Return |
             Token::Class | Token::Extends | Token::Implements | Token::New |
             Token::Public | Token::Private | Token::Protected | Token::Static |
@@ -105,7 +114,8 @@ impl Token {
     pub fn is_operator(&self) -> bool {
         matches!(self,
             Token::Equals | Token::Plus | Token::Minus | Token::Multiply |
-            Token::Divide | Token::Dot
+            Token::Divide | Token::Dot | Token::Colon | Token::QuestionMark |
+            Token::NullCoalescing | Token::Arrow | Token::Increment | Token::Decrement
         )
     }
     
@@ -128,11 +138,17 @@ impl std::fmt::Display for Token {
             Token::Number(n) => write!(f, "{}", n),
             Token::String(s) => write!(f, "\"{}\"", s),
             Token::Equals => write!(f, "="),
+            Token::Arrow => write!(f, "=>"),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Multiply => write!(f, "*"),
             Token::Divide => write!(f, "/"),
             Token::Dot => write!(f, "."),
+            Token::Colon => write!(f, ":"),
+            Token::QuestionMark => write!(f, "?"),
+            Token::NullCoalescing => write!(f, "??"),
+            Token::Increment => write!(f, "++"),
+            Token::Decrement => write!(f, "--"),
             Token::Semicolon => write!(f, ";"),
             Token::OpenParen => write!(f, "("),
             Token::CloseParen => write!(f, ")"),
