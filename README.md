@@ -1,7 +1,9 @@
-<<<<<<< HEAD
-# RustyPHP
-=======
+
 # RustyPHP 🦀
+
+<div align="center">
+  <img src="assets/logo.jpeg" alt="RustyPHP Logo" width="200" />
+</div>
 
 A complete PHP implementation in Rust, designed for performance, safety, and compatibility.
 
@@ -348,7 +350,5 @@ at your option.
 - **GitHub Issues**: [Report bugs or request features](https://github.com/aminshamim/RustyPHP/issues)
 - **Discussions**: [Join the conversation](https://github.com/aminshamim/RustyPHP/discussions)
 
----
 
 **RustyPHP** - Bringing PHP's simplicity with Rust's performance and safety 🦀✨
->>>>>>> arithmetic
