@@ -1,0 +1,21 @@
+[package]
+name = "php-web"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Web server and SAPI implementations"
+
+[dependencies]
+php-lexer = { path = "../php-lexer" }
+php-parser = { path = "../php-parser" }
+php-types = { path = "../php-types" }
+actix-web.workspace = true
+tera.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+log.workspace = true
+env_logger.workspace = true

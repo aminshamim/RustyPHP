@@ -1,0 +1,22 @@
+[package]
+name = "php-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = ""
+
+[dependencies]
+# Add crate-specific dependencies here
+serde.workspace = true
+thiserror.workspace = true
+php-lexer = { path = "../php-lexer" }
+php-parser = { path = "../php-parser" }
+php-runtime = { path = "../php-runtime" }
+
+[[bin]]
+name = "php"
+path = "src/bin/php.rs"
+

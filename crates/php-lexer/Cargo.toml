@@ -1,0 +1,13 @@
+[package]
+name = "php-lexer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "PHP tokenization and lexical analysis"
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true

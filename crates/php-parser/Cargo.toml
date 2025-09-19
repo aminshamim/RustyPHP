@@ -1,0 +1,15 @@
+[package]
+name = "php-parser"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "PHP syntax parsing and AST generation"
+
+[dependencies]
+php-lexer = { path = "../php-lexer" }
+php-types = { path = "../php-types" }
+serde.workspace = true
+thiserror.workspace = true
