@@ -2,130 +2,517 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PHP Playground in Rust</title>
+    <title>RustyPHP Playground</title>
     <style>
-        /* General Layout */
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
+        /* Reset and base styles */
+        * {
             margin: 0;
             padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
             color: #333;
-            overflow: hidden;
         }
 
-        /* Container */
-        .container {
-            width: 90%;
-            max-width: 800px;
-            background: #ffffff;
-            box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-            padding: 20px;
-            box-sizing: border-box;
-            text-align: center;
-            overflow: hidden;
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
         }
 
-        h1 {
+        .header h1 {
             font-size: 24px;
-            margin-bottom: 10px;
-            color: #4a90e2;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
-        /* Textarea Styling */
-        textarea {
-            width: 100%;
-            height: 150px;
-            padding: 10px;
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        /* Main layout */
+        .playground {
+            display: flex;
+            height: calc(100vh - 70px);
+            gap: 1px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .editor-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        .output-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .panel-title {
+            font-weight: 600;
             font-size: 16px;
-            font-family: 'Courier New', monospace;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            resize: vertical;
-            box-sizing: border-box;
-            margin-bottom: 10px;
+            color: #555;
         }
 
-        /* Button Styling */
-        button {
-            background-color: #4a90e2;
+        .run-button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
             padding: 10px 20px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 5px;
+            border-radius: 25px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
-            margin-top: 5px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: transform 0.2s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
 
-        button:hover {
-            background-color: #357ab7;
+        .run-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .run-button:active {
+            transform: translateY(0);
+        }
+
+        .run-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Monaco Editor Container */
+        #editor-container {
+            flex: 1;
+            border: none;
+            position: relative;
         }
 
         /* Output Styling */
-        pre#output {
-            width: 100%;
-            background-color: #f9f9f9;
-            color: #333;
-            padding: 15px;
-            font-size: 15px;
-            border-radius: 5px;
-            border: 1px solid #ddd;
-            margin-top: 20px;
-            text-align: left;
-            min-height: 50px;
-            box-sizing: border-box;
-            overflow-x: auto; /* Prevents overflow from large text */
-            white-space: pre-wrap;
-            word-break: break-word;
+        .output-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
         }
 
-        /* Response Time Styling */
+        #output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            min-height: 150px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .execution-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
         .response-time {
-            color: #888;
-            font-size: 14px;
-            margin-top: 5px;
-            text-align: right;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Dark theme */
+        body.dark {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        }
+
+        body.dark .header,
+        body.dark .editor-panel,
+        body.dark .output-panel {
+            background: rgba(44, 62, 80, 0.95);
+            color: #ecf0f1;
+        }
+
+        body.dark .panel-header {
+            background: rgba(52, 73, 94, 0.8);
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark .panel-title {
+            color: #bdc3c7;
+        }
+
+        body.dark #output {
+            background: #2c3e50;
+            color: #ecf0f1;
+            border-color: rgba(255, 255, 255, 0.1);
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>PHP Playground in Rust</h1>
-    <textarea id="php-code" placeholder="Write your PHP code here...">echo 'Hello, World!';</textarea>
-    <button onclick="executeCode()">Run Code</button>
-    <pre id="output">Output will appear here...</pre>
-    <div id="response-time" class="response-time"></div>
-</div>
+    <div class="header">
+        <h1>🦀 RustyPHP Playground</h1>
+        <div class="header-controls">
+            <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+            <span style="color: #888; font-size: 12px;">Monaco Editor • PHP 8.3</span>
+        </div>
+    </div>
 
-<script>
-    async function executeCode() {
-        const code = document.getElementById("php-code").value;
+    <div class="playground">
+        <!-- Editor Panel -->
+        <div class="editor-panel">
+            <div class="panel-header">
+                <span class="panel-title">📝 PHP Code Editor</span>
+                <button class="run-button" onclick="executeCode()" id="run-btn">
+                    ▶️ Run Code
+                </button>
+            </div>
+            <div id="editor-container"></div>
+        </div>
 
-        try {
-            const response = await fetch('/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(code)
+        <!-- Output Panel -->
+        <div class="output-panel">
+            <div class="panel-header">
+                <span class="panel-title">📤 Output</span>
+                <button onclick="clearOutput()" style="background: none; border: 1px solid #ccc; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Clear</button>
+            </div>
+            <div class="output-content">
+                <pre id="output">Ready to execute PHP code... 🚀</pre>
+                <div id="execution-info" class="execution-info" style="display: none;">
+                    <div>
+                        <span id="status" class="status"></span>
+                    </div>
+                    <div class="response-time" id="response-time"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monaco Editor -->
+    <script src="https://unpkg.com/monaco-editor@0.44.0/min/vs/loader.js"></script>
+    <script>
+        let editor;
+        let isDarkTheme = false;
+
+        // Initialize Monaco Editor
+        require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.44.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            // Configure PHP language
+            monaco.languages.register({ id: 'php' });
+            
+            // Set PHP language configuration
+            monaco.languages.setLanguageConfiguration('php', {
+                brackets: [
+                    ['{', '}'],
+                    ['[', ']'],
+                    ['(', ')']
+                ],
+                autoClosingPairs: [
+                    { open: '{', close: '}' },
+                    { open: '[', close: ']' },
+                    { open: '(', close: ')' },
+                    { open: '"', close: '"' },
+                    { open: "'", close: "'" }
+                ],
+                surroundingPairs: [
+                    { open: '{', close: '}' },
+                    { open: '[', close: ']' },
+                    { open: '(', close: ')' },
+                    { open: '"', close: '"' },
+                    { open: "'", close: "'" }
+                ]
             });
 
-            const result = await response.json();
+            // Define PHP syntax highlighting
+            monaco.languages.setMonarchTokensProvider('php', {
+                keywords: [
+                    'abstract', 'array', 'as', 'break', 'callable', 'case', 'catch', 'class',
+                    'clone', 'const', 'continue', 'declare', 'default', 'do', 'echo', 'else',
+                    'elseif', 'empty', 'enddeclare', 'endfor', 'endforeach', 'endif',
+                    'endswitch', 'endwhile', 'eval', 'exit', 'extends', 'final', 'finally',
+                    'for', 'foreach', 'function', 'global', 'goto', 'if', 'implements',
+                    'include', 'include_once', 'instanceof', 'insteadof', 'interface',
+                    'isset', 'list', 'namespace', 'new', 'or', 'print', 'private',
+                    'protected', 'public', 'require', 'require_once', 'return', 'static',
+                    'switch', 'throw', 'trait', 'try', 'unset', 'use', 'var', 'while',
+                    'xor', 'yield', 'die', 'and', 'null', 'true', 'false'
+                ],
 
-            // Display server output and response time in microseconds
-            document.getElementById("output").innerText = result.output;
-            document.getElementById("response-time").innerText = `Response time: ${result.response_time} µs`;
-        } catch (error) {
-            console.error("Error fetching response:", error);
-            document.getElementById("output").innerText = "An error occurred while executing the code.";
+                tokenizer: {
+                    root: [
+                        [/\<\?php/, 'keyword'],
+                        [/\?\>/, 'keyword'],
+                        [/[a-zA-Z_$][\w$]*/, {
+                            cases: {
+                                '@keywords': 'keyword',
+                                '@default': 'identifier'
+                            }
+                        }],
+                        [/\$[a-zA-Z_][\w]*/, 'variable'],
+                        [/"([^"\\]|\\.)*$/, 'string.invalid'],
+                        [/"/, 'string', '@string_double'],
+                        [/'([^'\\]|\\.)*$/, 'string.invalid'],
+                        [/'/, 'string', '@string_single'],
+                        [/\d*\.\d+([eE][\-+]?\d+)?/, 'number.float'],
+                        [/\d+/, 'number'],
+                        [/[;,.]/, 'delimiter'],
+                        [/[{}()\[\]]/, '@brackets'],
+                        [/[<>]=?/, 'operator'],
+                        [/[!]=?/, 'operator'],
+                        [/[=+\-*/%&|^~<>!]/, 'operator'],
+                        [/\/\*/, 'comment', '@comment'],
+                        [/\/\/.*$/, 'comment'],
+                        [/#.*$/, 'comment']
+                    ],
+
+                    comment: [
+                        [/[^\/*]+/, 'comment'],
+                        [/\*\//, 'comment', '@pop'],
+                        [/[\/*]/, 'comment']
+                    ],
+
+                    string_double: [
+                        [/[^\\"]+/, 'string'],
+                        [/\\./, 'string.escape.invalid'],
+                        [/"/, 'string', '@pop']
+                    ],
+
+                    string_single: [
+                        [/[^\\']+/, 'string'],
+                        [/\\./, 'string.escape.invalid'],
+                        [/'/, 'string', '@pop']
+                    ]
+                }
+            });
+
+            // Create the editor
+            editor = monaco.editor.create(document.getElementById('editor-container'), {
+                value: `<?php
+// Welcome to RustyPHP Playground! 🦀
+// This is a high-performance PHP interpreter built in Rust
+
+echo "Hello from RustyPHP!\\n";
+
+// Try some basic PHP features:
+$name = "World";
+$numbers = [1, 2, 3, 4, 5];
+$sum = array_sum($numbers);
+
+echo "Hello, $name!\\n";
+echo "Sum of numbers: $sum\\n";
+
+// Test some built-in functions
+$json = json_encode(['message' => 'PHP + Rust = ❤️', 'version' => '8.3']);
+echo "JSON: $json\\n";
+
+// Math operations
+$result = 2 + 3 * 4;
+echo "2 + 3 * 4 = $result\\n";
+
+?>`,
+                language: 'php',
+                theme: 'vs',
+                automaticLayout: true,
+                fontSize: 14,
+                lineNumbers: 'on',
+                roundedSelection: false,
+                scrollBeyondLastLine: false,
+                minimap: { enabled: true },
+                wordWrap: 'on',
+                folding: true,
+                cursorBlinking: 'smooth',
+                cursorSmoothCaretAnimation: true,
+                renderWhitespace: 'selection',
+                contextmenu: true,
+                mouseWheelZoom: true,
+                smoothScrolling: true,
+                suggest: {
+                    showKeywords: true,
+                    showSnippets: true,
+                    showFunctions: true
+                }
+            });
+
+            // Add keyboard shortcut for running code
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, executeCode);
+            editor.addCommand(monaco.KeyCode.F5, executeCode);
+        });
+
+        // Execute PHP code
+        async function executeCode() {
+            if (!editor) return;
+            
+            const code = editor.getValue();
+            const runBtn = document.getElementById('run-btn');
+            const output = document.getElementById('output');
+            const executionInfo = document.getElementById('execution-info');
+            const status = document.getElementById('status');
+            const responseTime = document.getElementById('response-time');
+
+            // Update UI for loading state
+            runBtn.innerHTML = '<span class="loading"></span> Running...';
+            runBtn.disabled = true;
+            output.textContent = 'Executing...';
+            executionInfo.style.display = 'none';
+
+            try {
+                const startTime = performance.now();
+                const response = await fetch('/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(code)
+                });
+
+                const result = await response.json();
+                const endTime = performance.now();
+                const clientTime = Math.round(endTime - startTime);
+
+                // Display results
+                output.textContent = result.output || 'No output';
+                
+                // Show execution info
+                executionInfo.style.display = 'flex';
+                if (result.errors && result.errors.length > 0) {
+                    status.textContent = 'Error';
+                    status.className = 'status error';
+                    output.textContent = result.errors.join('\\n');
+                } else {
+                    status.textContent = 'Success';
+                    status.className = 'status success';
+                }
+                
+                responseTime.textContent = `Server: ${result.time_us}µs • Client: ${clientTime}ms`;
+
+            } catch (error) {
+                console.error('Execution error:', error);
+                output.textContent = `Network Error: ${error.message}`;
+                executionInfo.style.display = 'flex';
+                status.textContent = 'Network Error';
+                status.className = 'status error';
+                responseTime.textContent = 'Failed to connect to server';
+            } finally {
+                // Reset button
+                runBtn.innerHTML = '▶️ Run Code';
+                runBtn.disabled = false;
+            }
         }
-    }
-</script>
+
+        // Clear output
+        function clearOutput() {
+            document.getElementById('output').textContent = 'Output cleared...';
+            document.getElementById('execution-info').style.display = 'none';
+        }
+
+        // Toggle theme
+        function toggleTheme() {
+            isDarkTheme = !isDarkTheme;
+            const themeBtn = document.querySelector('.theme-toggle');
+            
+            if (isDarkTheme) {
+                document.body.classList.add('dark');
+                monaco.editor.setTheme('vs-dark');
+                themeBtn.textContent = '☀️ Light';
+            } else {
+                document.body.classList.remove('dark');
+                monaco.editor.setTheme('vs');
+                themeBtn.textContent = '🌙 Dark';
+            }
+        }
+
+        // Auto-focus editor on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (editor) {
+                    editor.focus();
+                }
+            }, 100);
+        });
+    </script>
 </body>
 </html>

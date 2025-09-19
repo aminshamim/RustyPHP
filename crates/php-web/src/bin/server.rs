@@ -26,14 +26,25 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
+    // Determine port (env override) default 1010
+    let port: u16 = std::env::var("RUSTYPHP_PORT").ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10101);
+
+    let bind_addr = format!("127.0.0.1:{}", port);
+
     let server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(tera.clone()))
             .configure(php_web::playground::init_routes)
     })
-    .bind("127.0.0.1:8080")?;
-    
-    info!("Server starting on http://127.0.0.1:8080");
+    .bind(&bind_addr).map_err(|e| {
+        eprintln!("Failed to bind {}: {}", bind_addr, e);
+        if bind_addr.ends_with(":1010") { eprintln!("Port 1010 may require elevated privileges on some systems. Try an unprivileged port like 10101."); }
+        e
+    })?;
+
+    info!("Server starting on http://{}", bind_addr);
     server.run()
     .await
 }

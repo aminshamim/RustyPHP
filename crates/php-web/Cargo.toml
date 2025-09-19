@@ -12,6 +12,7 @@ description = "Web server and SAPI implementations"
 php-lexer = { path = "../php-lexer" }
 php-parser = { path = "../php-parser" }
 php-types = { path = "../php-types" }
+php-runtime = { path = "../php-runtime" }
 actix-web.workspace = true
 tera.workspace = true
 serde.workspace = true
