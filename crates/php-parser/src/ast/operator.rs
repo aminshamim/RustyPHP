@@ -33,6 +33,12 @@ pub enum BinaryOp {
     LogicalAnd,
     /// Logical OR: ||
     LogicalOr,
+    /// Spaceship: <=>
+    Spaceship,
+    /// Bitwise AND: &
+    BitwiseAnd,
+    /// Bitwise OR: |
+    BitwiseOr,
 }
 
 /// Unary operators
@@ -60,10 +66,12 @@ impl BinaryOp {
             BinaryOp::LogicalAnd => 2,
             BinaryOp::Equal | BinaryOp::NotEqual => 3,
             BinaryOp::LessThan | BinaryOp::LessThanOrEqual | 
-            BinaryOp::GreaterThan | BinaryOp::GreaterThanOrEqual => 4,
-            BinaryOp::Concatenate => 5,
-            BinaryOp::Add | BinaryOp::Subtract => 6,
-            BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Modulo => 7,
+            BinaryOp::GreaterThan | BinaryOp::GreaterThanOrEqual | BinaryOp::Spaceship => 4,
+            BinaryOp::BitwiseAnd => 5,
+            BinaryOp::BitwiseOr => 5, // treat same precedence for simplified implementation
+            BinaryOp::Concatenate => 6,
+            BinaryOp::Add | BinaryOp::Subtract => 7,
+            BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Modulo => 8,
         }
     }
     
@@ -90,6 +98,9 @@ impl fmt::Display for BinaryOp {
             BinaryOp::GreaterThanOrEqual => ">=",
             BinaryOp::LogicalAnd => "&&",
             BinaryOp::LogicalOr => "||",
+            BinaryOp::Spaceship => "<=>",
+            BinaryOp::BitwiseAnd => "&",
+            BinaryOp::BitwiseOr => "|",
         };
         write!(f, "{}", op)
     }

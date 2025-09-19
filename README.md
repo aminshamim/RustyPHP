@@ -73,93 +73,113 @@ cargo check --workspace
 cargo test --workspace
 ```
 
-## 📋 Current Capacity
+## 📋 Current Capacity (Updated)
 
-### ✅ **Fully Implemented & Tested**
-#### **Lexical Analysis (php-lexer)**
+### ✅ **Implemented (Phase 1 Core + Recent Extensions)**
+#### **Lexical Analysis (`php-lexer`)**
 * ✅ PHP Tags: `<?php`, `?>`
-* ✅ Variables: `$variable`
-* ✅ Literals: Numbers (int/float), strings ("double" with interpolation, 'single')
-* ✅ Operators: Arithmetic `+ - * /`, comparison `< > <= >= == !=`, assignment `=`, concatenation `.`, increment/decrement `++ --`, null coalescing `??`
-* ✅ Keywords: `echo`, `print`, `if`, `else`, `elseif`, `while`, `for`, `foreach`, `switch`, `case`, `default`, `break`, `continue`, `function`, `return`, `true`, `false`, `null`
-* ✅ Punctuation: `; , ( ) { } [ ] =>`
-* ✅ Comments: `//`, `#`, `/* */`
+* ✅ Variables & identifiers
+* ✅ Literals: integers, floats, single & double quoted strings, nowdoc/ heredoc (basic)
+* ✅ Operators: arithmetic `+ - * /`, comparison `< > <= >= == != <=>`, bitwise `& |`, concatenation `.`, assignment `=`, null coalescing `??`, null coalescing assignment `??=`, increment/decrement `++ --`
+* ✅ Logical tokens: `and` / `or` keywords (runtime truthiness implemented) – symbolic `&& || !` still pending
+* ✅ Punctuation & structure: `; , ( ) { } [ ] => :`
+* ✅ Keywords / Control: `if else elseif while for foreach switch case default break continue function return match yield static`
+* ✅ Comments: `//` `#` `/* ... */`
 
-#### **Syntax Parsing (php-parser)**
-* ✅ Expressions: Precedence climbing (handles `2 + 3 * 4` correctly)
-* ✅ Array Literals: `[1, 2, "a" => 3]`
-* ✅ Array Access Chains: `$arr[0]["key"]`
-* ✅ Assignments & Echo/Print
-* ✅ Control Flow: `if / elseif / else`, `while`, `for(init;cond;inc)`, `foreach ($arr as $v)` & `foreach ($arr as $k => $v)`
-* ✅ Switch/Case/Default with break handling
-* ✅ Function Definitions & Calls (positional params)
-* ✅ Constants: `define("NAME", value)` and `const NAME = value;`
-* ✅ Null Coalescing: `$a ?? $b`
-* ✅ Postfix Increment/Decrement parsing
-* ✅ String Interpolation Support (parsed as plain strings; interpolation applied at runtime)
-* ✅ AST kept pure (no execution logic)
+#### **Syntax Parsing (`php-parser`)**
+* ✅ Precedence–climbing expression parser (correct grouping like `2 + 3 * 4`)
+* ✅ Arrays (numeric & associative) including keyed elements and auto‑indexing
+* ✅ Array access & nested chains `$a[0]["k"]`
+* ✅ Assignments, null‑coalesce assignment `??=`
+* ✅ Destructuring assignment basic form (`[a, 'k' => b] = ...`)
+* ✅ Control flow: `if/elseif/else`, `while`, `for`, `foreach (value / key=>value)`, `switch` / `case` / `default`
+* ✅ `match` expression (PHP 8 style)
+* ✅ Ternary operator `?:`
+* ✅ Function definitions (positional params) & calls
+* ✅ Static variable declarations inside functions
+* ✅ Closures / arrow functions placeholder representation
+* ✅ `yield` expression (semantic placeholder)
+* ✅ Postfix & prefix `++ --`
+* ✅ String interpolation kept AST‑agnostic (runtime interpolation)
 
-#### **Runtime (php-runtime)**
-* ✅ Variable storage and lookup (undefined vars => `null` behavior)
-* ✅ Constant definition storage
-* ✅ Expression evaluation: arithmetic, comparison, concatenation, null coalescing
-* ✅ Control flow execution: if/else, while, for, foreach, switch (with break/continue)
-* ✅ Function invocation (user-defined) with isolated scope & simple return handling
-* ✅ Arrays: indexed & associative insert, access, auto-increment keys
-* ✅ Array access evaluation with graceful `null` on missing index
-* ✅ Superglobal bootstrap (minimal `$_GET` placeholder)
-* ✅ Postfix `++` / `--` semantics
-* ✅ Simple double-quoted string variable interpolation
+#### **Runtime (`php-runtime`)**
+* ✅ Variable, constant, and (user) function symbol tables
+* ✅ Control flow execution with proper break / continue propagation
+* ✅ Arithmetic, comparison, concatenation, bitwise, logical (keyword) operators
+* ✅ Null coalescing + coalescing assignment, ternary, match evaluation
+* ✅ Static variables with per‑function persistence
+* ✅ Destructuring assignment handling (array + keyed targets)
+* ✅ Arrays: push, associative insert, integer & string key access, tolerant missing / non‑array access returns `null`
+* ✅ Basic closures (stored by generated id) & dynamic invocation placeholder
+* ✅ Output buffering stack (`ob_start`, `ob_get_clean`) and direct write fallback
+* ✅ Simple string interpolation (variable tokens only)
+* ✅ Preliminary built‑ins (see below)
+
+#### **Built‑ins / Utility Implemented (Provisional)**
+| Category | Functions / Features |
+|----------|----------------------|
+| Env / System | `getenv` |
+| Arrays | `array_merge`, `array_sum`, `usort` (simplified comparator), `iterator_to_array`, `implode`, destructuring |
+| Strings / Formatting | `str_repeat`, `printf` (subset `%s %d %f`), interpolation, heredoc/nowdoc pass‑through |
+| JSON | `json_encode` (basic flags: unescaped slashes/unicode), `json_decode` (assoc arrays) |
+| Regex | `preg_match` (basic, no pattern modifiers beyond delimiters) |
+| Filters | `filter_var` (`FILTER_VALIDATE_INT`) + constants bootstrap |
+| Parsing | `parse_str` |
+| Flow / Info | `isset`, `define`, `set_error_handler` (stub) |
+| Buffering | `ob_start`, `ob_get_clean` |
+
+> Note: Implementations prioritize functional bootstrapping over strict edge‑case parity. Error / warning behaviors are intentionally lenient (no E_NOTICE / E_WARNING yet).
 
 #### **Testing & Tooling**
-* ✅ Organized integration tests & PHP file based scenarios
-* ✅ Debug utilities (token dump earlier used; now cleaned)
-* ✅ Modular crate boundaries respected
-* ✅ Build & test scripts (`scripts/test_all.sh`)
+* ✅  Multi‑crate integration tests & PHP file scenarios
+* ✅  Script runner + release binary parity verified
+* ✅  Debug / inspection utilities (token inspection previously) 
+* ✅  CI‑friendly workspace scripts (`scripts/test_all.sh`)
 
-#### **Recently Added (Since Initial README Draft)**
-> Arrays, array access, foreach, for loops, switch/case/default, break/continue control flow signals, user functions, null coalescing, string interpolation, postfix inc/dec.
+### 🆕 Recently Added (This Iteration Cycle)
+`match`, `ternary`, null‑coalescing assignment, static vars, destructuring assignment, basic closures / dynamic call placeholder, output buffering, JSON encode/decode, regex (`preg_match`), filtering (`filter_var` int), environment access (`getenv`), formatting (`printf`), array utilities (`array_merge`, `array_sum`, `usort`, `implode`), parsing utilities (`parse_str`).
 
-### 🚧 **In Active Development**
-* Enriched Runtime semantics (logical operators & strict comparisons upcoming)
-* Type System refinements (truthiness & coercions expansion)
-* Enhanced Error Reporting (line/column propagation across crates)
-* Standard Library bootstrap (planned migration of built-ins like `count`, `strlen`)
+### 🚧 In Active Development
+* Comparator & true closure value type (replace string id hack)
+* Generator semantics (current `yield` is a no‑op placeholder)
+* Enhanced error reporting (line/column propagation)
+* Strict comparisons + logical operator symbols (`===`, `!==`, `&&`, `||`, `!`)
+* Try / catch / finally execution semantics (parser groundwork partially present elsewhere)
 
-### 📅 **Planned Features** (see [ROADMAP.md](ROADMAP.md))
-* Advanced Control Flow: try/catch/finally, ternary `?:`, Elvis `?:` nuance, match (PHP 8)
-* Object-Oriented Programming: classes, interfaces, traits, visibility, static
-* Functions: default params, variadics, by-reference params, closures/anonymous functions
-* Strict & Identity Comparisons: `===`, `!==`
-* Logical Operators: `&&`, `||`, `!`
-* Remaining Operators: modulo `%`, assignment compound ops `+= -= *= .=`
-* Arrays: spread, nested destructuring (later phase), by-reference foreach
-* Standard Library: Core PHP 8.x coverage
-* Web Server Integration: basic SAPI simulation & request globals population
-* Extension System: FFI layer & dynamic loading
-* Error Handling: exceptions, stack traces
-* Performance: opcode-like intermediate representation (future optimization phase)
+### 📅 Planned / Upcoming (excerpt – see [ROADMAP.md](ROADMAP.md))
+* Full logical & identity operators
+* Compound assignments (`+= -= *= /= .=` etc.) & modulo `%`
+* Function features: default args, variadics, by‑reference params, proper closures with captured environment
+* Improved interpolation (`{"expr"}` forms)
+* Exceptions & stack traces
+* Object model: classes, properties, methods, visibility, traits, interfaces
+* Array spread, by‑reference foreach, advanced destructuring
+* Standard library expansion / namespacing
+* Performance layer (IR / opcode optimization)
+* Extension / FFI bridge & web SAPI harness
 
-### ⚠️ Current Limitations
+### ⚠️ Current Limitations (Updated)
 | Area | Missing / Partial |
 |------|-------------------|
-| Operators | `===`, `!==`, `%`, `&&`, `||`, `!`, compound assignments, ternary `?:` |
-| Types | Objects (stub only), resources (placeholder), no references | 
-| Functions | No default params, no closures, no variadics, no recursion tests yet |
-| Arrays | No nested modification semantics (write-through on access), no spread, no unset | 
-| Strings | Interpolation is simple (no complex `{}` or array deref) |
-| Error Handling | No exceptions, minimal error context | 
-| OOP | Classes/interfaces/traits not executed (parsing not yet started) |
-| Stdlib | Built-ins not yet implemented beyond `define` handling | 
-| I/O | No file/network APIs | 
-| Security | No sandboxing / open_basedir equivalents |
+| Operators | `===`, `!==`, `%`, `&&`, `||`, `!`, compound assignments, modulo, bitwise XOR, shifts |
+| Generators | `yield` returns `null` (no generator objects / iteration) |
+| Closures | Stored as string ids (no captured lexical environment) |
+| Functions | No default params, variadics, by‑ref params, user recursion untested edge cases |
+| Arrays | No spread, unset, reference semantics, stable order for json/object decode only basic |
+| JSON | Flags incomplete (only partial unescaped handling) & error modes ignored |
+| Regex | No modifiers (`i`, `m`, etc.) and limited delimiter support (`/`) |
+| Filtering | Only `FILTER_VALIDATE_INT` implemented (email, url pending) |
+| Error Handling | No exceptions, silent instead of notices/warnings |
+| OOP | Not started (parsing & runtime) |
+| Security | No sandboxing, no resource limits |
+| Performance | No JIT / IR; naive evaluation model |
 
-### 🔍 Near-Term Focus (Next Iteration Targets)
-1. Logical operators & strict comparison tokens
-2. Modulo operator end-to-end
-3. Ternary conditional expression parsing/execution
-4. Function return value propagation refinements & early `return` inside nested blocks
-5. Basic exception scaffolding (enum + placeholder throw)
+### 🔍 Near-Term Focus
+1. Introduce a `PhpValue::Closure` with captured environment & real callable invocation
+2. Implement identity / logical operator symbols & strict comparison semantics
+3. Add `FILTER_VALIDATE_EMAIL` & basic validator framework
+4. Generator model (collect yielded values or iterator abstraction)
+5. Exception enum + minimal `throw` / `try/finally` runtime execution
 
 ## 🧪 Examples
 

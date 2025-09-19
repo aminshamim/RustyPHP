@@ -11,7 +11,9 @@ description = ""
 [dependencies]
 # Add crate-specific dependencies here
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 php-types = { path = "../php-types" }
 php-parser = { path = "../php-parser" }
+regex.workspace = true
 

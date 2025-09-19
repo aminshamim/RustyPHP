@@ -26,6 +26,20 @@ pub enum Expr {
         /// Right operand
         right: Box<Expr>,
     },
+    /// Yield expression (simplified, no generator state): yield expr; or yield from expr;
+    Yield {
+        /// Inner expression value (ignored for now)
+        value: Box<Expr>,
+    },
+    /// Method call: target->method(args)
+    MethodCall {
+        /// Target expression
+        target: Box<Expr>,
+        /// Method name
+        method: String,
+        /// Arguments
+        args: Vec<Expr>,
+    },
     /// Unary operation: -$a, !$b
     Unary {
         /// Operator
@@ -55,6 +69,38 @@ pub enum Expr {
         left: Box<Expr>,
         /// Right expression
         right: Box<Expr>,
+    },
+    /// Arrow function: fn(params) => expr
+    ArrowFunction {
+        /// Parameter variable names
+        params: Vec<String>,
+        /// Body expression
+        body: Box<Expr>,
+    },
+    /// Dynamic function/closure call: $var(...)
+    DynamicCall {
+        /// Variable holding closure
+        target: Box<Expr>,
+        /// Arguments
+        args: Vec<Expr>,
+    },
+    /// Ternary conditional: condition ? then : else
+    Ternary {
+        /// Condition expression
+        condition: Box<Expr>,
+        /// Expression if condition is truthy (may be None for shorthand ?: operator to reuse condition)
+        then_expr: Option<Box<Expr>>,
+        /// Else expression
+        else_expr: Box<Expr>,
+    },
+    /// Match expression: match (subject) { conditions => result, default => result }
+    Match {
+        /// Subject expression evaluated once
+        subject: Box<Expr>,
+        /// Arms list: each arm has a list of condition expressions and a boxed result expression
+        arms: Vec<(Vec<Expr>, Box<Expr>)>,
+        /// Optional default arm expression (boxed)
+        default_arm: Option<Box<Expr>>,
     },
 }
 
@@ -100,6 +146,35 @@ impl fmt::Display for Expr {
             }
             Expr::ArrayAccess { array, index } => write!(f, "{}[{}]", array, index),
             Expr::NullCoalesce { left, right } => write!(f, "({} ?? {})", left, right),
+            Expr::ArrowFunction { params, body } => {
+                write!(f, "fn(")?;
+                for (i,p) in params.iter().enumerate() { if i>0 { write!(f, ", ")?; } write!(f, "${}", p)?; }
+                write!(f, ") => {}", body)
+            }
+            Expr::DynamicCall { target, args } => {
+                write!(f, "{}(", target)?;
+                for (i,a) in args.iter().enumerate() { if i>0 { write!(f, ", ")?; } write!(f, "{}", a)?; }
+                write!(f, ")")
+            }
+            Expr::Ternary { condition, then_expr, else_expr } => {
+                if let Some(t) = then_expr { write!(f, "({} ? {} : {})", condition, t, else_expr) } else { write!(f, "({} ?: {})", condition, else_expr) }
+            }
+            Expr::Match { subject, arms, default_arm } => {
+                write!(f, "match ({}) {{ ", subject)?;
+                for (i, (conds, result)) in arms.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    for (j, c) in conds.iter().enumerate() { if j>0 { write!(f, ", ")?; } write!(f, "{}", c)?; }
+                    write!(f, " => {}", result)?;
+                }
+                if let Some(def) = default_arm { if !arms.is_empty() { write!(f, ", ")?; } write!(f, "default => {}", def)?; }
+                write!(f, " }}")
+            }
+            Expr::Yield { value } => write!(f, "yield {}", value),
+            Expr::MethodCall { target, method, args } => {
+                write!(f, "{}->{}(", target, method)?;
+                for (i,a) in args.iter().enumerate() { if i>0 { write!(f, ", ")?; } write!(f, "{}", a)?; }
+                write!(f, ")")
+            }
         }
     }
 }

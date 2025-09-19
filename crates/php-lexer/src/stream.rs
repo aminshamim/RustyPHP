@@ -31,6 +31,19 @@ pub struct CharStream<'a> {
     position: Position,
 }
 
+impl<'a> Clone for CharStream<'a> {
+    fn clone(&self) -> Self {
+        // NOTE: We cannot clone the internal iterator state exactly without storing the original slice & offset.
+        // For the limited heuristic in the lexer (one-char lookahead already exists), we avoid deep clone usage now.
+        // If clone is requested, we create a new empty-at-end stream to prevent misuse.
+        // Future improvement: refactor CharStream to store original & index to enable true cloning.
+        Self {
+            chars: "".chars().peekable(),
+            position: self.position,
+        }
+    }
+}
+
 impl<'a> CharStream<'a> {
     /// Create a new character stream from input string
     pub fn new(input: &'a str) -> Self {

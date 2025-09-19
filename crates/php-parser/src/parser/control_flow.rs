@@ -335,4 +335,37 @@ impl ControlFlowParser {
 
         Ok(Stmt::Switch { expression: expr, cases, default: default_block })
     }
+
+    /// Parse try-catch block (simplified: returns try block only, catches ignored)
+    pub fn parse_try(
+        tokens: &mut Peekable<IntoIter<Token>>,
+        position: &mut usize,
+    ) -> ParseResult<Stmt> {
+        Self::consume_token(tokens, position, Token::Try)?;
+        // Parse try block (expect '{')
+        let try_block = super::main::Parser::parse_block_statement(tokens, position)?;
+        // Zero or more catch blocks; consume and ignore
+        loop {
+            match tokens.peek() {
+                Some(Token::Catch) => {
+                    super::utils::ParserUtils::next_token(tokens, position); // consume 'catch'
+                    Self::consume_token(tokens, position, Token::OpenParen)?;
+                    // Consume tokens inside parentheses until CloseParen
+                    while let Some(tok) = tokens.peek() {
+                        if matches!(tok, Token::CloseParen) { break; }
+                        super::utils::ParserUtils::next_token(tokens, position);
+                    }
+                    Self::consume_token(tokens, position, Token::CloseParen)?;
+                    // Catch block
+                    let _catch_block = super::main::Parser::parse_block_statement(tokens, position)?; // ignored
+                }
+                Some(Token::Identifier(id)) if id == "finally" => {
+                    super::utils::ParserUtils::next_token(tokens, position); // 'finally'
+                    let _finally_block = super::main::Parser::parse_block_statement(tokens, position)?; // ignored
+                }
+                _ => break,
+            }
+        }
+        Ok(try_block)
+    }
 }

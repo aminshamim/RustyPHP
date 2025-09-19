@@ -7,6 +7,7 @@
 //! - Expression statements
 
 use crate::ast::{Expr, Stmt};
+use crate::ast::DestructTarget;
 use crate::error::{ParseError, ParseResult};
 use php_lexer::Token;
 use std::iter::Peekable;
@@ -16,6 +17,38 @@ use std::vec::IntoIter;
 pub struct StatementParser;
 
 impl StatementParser {
+    /// Parse a declare statement (limited support: declare(strict_types=1); ignored)
+    pub fn parse_declare(
+        tokens: &mut Peekable<IntoIter<Token>>,
+        position: &mut usize,
+    ) -> ParseResult<Stmt> {
+        Self::consume_token(tokens, position, Token::Declare)?;
+        // Expect '('
+        Self::consume_token(tokens, position, Token::OpenParen)?;
+        // Consume identifier = expression pairs separated by commas until ')'
+        loop {
+            // key identifier
+            match super::utils::ParserUtils::next_token(tokens, position) {
+                Some(Token::Identifier(_)) => {},
+                Some(tok) => return Err(ParseError::ExpectedToken { expected: "identifier".to_string(), found: format!("{:?}", tok), position: *position }),
+                None => return Err(ParseError::UnexpectedEof),
+            }
+            // '='
+            Self::consume_token(tokens, position, Token::Equals)?;
+            // value expression (reuse existing expression parser)
+            let _ = super::expressions::ExpressionParser::parse_expression(tokens, position)?;
+            // comma or ')'
+            match tokens.peek() {
+                Some(Token::Comma) => { super::utils::ParserUtils::next_token(tokens, position); },
+                Some(Token::CloseParen) => { super::utils::ParserUtils::next_token(tokens, position); break; },
+                other => return Err(ParseError::ExpectedToken { expected: ", or )".to_string(), found: format!("{:?}", other), position: *position }),
+            }
+        }
+        // semicolon
+        Self::consume_semicolon(tokens, position)?;
+        // Represent as empty statement (no dedicated AST variant yet)
+        Ok(Stmt::Block(vec![]))
+    }
     /// Parse echo statement
     pub fn parse_echo(
         tokens: &mut Peekable<IntoIter<Token>>,
@@ -43,61 +76,222 @@ impl StatementParser {
         tokens: &mut Peekable<IntoIter<Token>>,
         position: &mut usize,
     ) -> ParseResult<Stmt> {
-        // Check if it's a variable at the start
-        if let Some(Token::Variable(name)) = tokens.peek().cloned() {
-            // Consume the variable token
-            super::utils::ParserUtils::next_token(tokens, position);
-            
-            match tokens.peek() {
+        // Detect destructuring assignment starting with '[' ... '] ='
+        if let Some(Token::OpenBracket) = tokens.peek() {
+            if let Ok(stmt) = Self::try_parse_destructuring(tokens, position) {
+                return Ok(stmt);
+            }
+        }
+        // Peek for variable-led assignment or increment/decrement without consuming unless confirmed
+        if let Some(Token::Variable(var_name)) = tokens.peek().cloned() {
+            // Clone iterator to inspect following token
+            let mut la = tokens.clone();
+            let _ = la.next(); // consume variable in lookahead
+            match la.peek() {
                 Some(Token::Equals) => {
-                    // It's an assignment: $var = expr;
-                    super::utils::ParserUtils::next_token(tokens, position); // consume equals
+                    // Commit: real consume variable and '=' path
+                    super::utils::ParserUtils::next_token(tokens, position); // variable
+                    super::utils::ParserUtils::next_token(tokens, position); // '='
+                    if let Some(Token::Ampersand) = tokens.peek() { super::utils::ParserUtils::next_token(tokens, position); }
                     let value = super::expressions::ExpressionParser::parse_expression(tokens, position)?;
-                    Self::consume_semicolon(tokens, position)?;
-                    return Ok(Stmt::Assignment { variable: name, value });
+                    // Semicolon or tolerant heuristic
+                    match tokens.peek() {
+                        Some(Token::Semicolon) => { super::utils::ParserUtils::next_token(tokens, position); }
+                        Some(Token::Variable(_)) | Some(Token::Function) | Some(Token::If) | Some(Token::Echo) | Some(Token::Return) | Some(Token::Const) | Some(Token::OpenBrace) => {}
+                        _ => { Self::consume_semicolon(tokens, position)?; }
+                    }
+                    return Ok(Stmt::Assignment { variable: var_name, value });
                 }
                 Some(Token::Increment) => {
-                    // It's $var++; - construct the postfix increment expression
-                    super::utils::ParserUtils::next_token(tokens, position); // consume increment
-                    let expr = crate::ast::Expr::Unary {
-                        op: crate::ast::UnaryOp::PostIncrement,
-                        operand: Box::new(crate::ast::Expr::Variable(name)),
-                    };
+                    super::utils::ParserUtils::next_token(tokens, position); // variable
+                    super::utils::ParserUtils::next_token(tokens, position); // ++
+                    let expr = crate::ast::Expr::Unary { op: crate::ast::UnaryOp::PostIncrement, operand: Box::new(crate::ast::Expr::Variable(var_name)) };
                     Self::consume_semicolon(tokens, position)?;
-                    return Ok(crate::ast::Stmt::Expression(expr));
+                    return Ok(Stmt::Expression(expr));
                 }
                 Some(Token::Decrement) => {
-                    // It's $var--; - construct the postfix decrement expression
-                    super::utils::ParserUtils::next_token(tokens, position); // consume decrement
-                    let expr = crate::ast::Expr::Unary {
-                        op: crate::ast::UnaryOp::PostDecrement,
-                        operand: Box::new(crate::ast::Expr::Variable(name)),
-                    };
+                    super::utils::ParserUtils::next_token(tokens, position); // variable
+                    super::utils::ParserUtils::next_token(tokens, position); // --
+                    let expr = crate::ast::Expr::Unary { op: crate::ast::UnaryOp::PostDecrement, operand: Box::new(crate::ast::Expr::Variable(var_name)) };
                     Self::consume_semicolon(tokens, position)?;
-                    return Ok(crate::ast::Stmt::Expression(expr));
+                    return Ok(Stmt::Expression(expr));
                 }
-                _ => {
-                    // It's some other expression starting with $var
-                    // We need to let the expression parser take over, but we've already consumed the variable
-                    // This is tricky because we can't rewind the iterator
-                    // For now, let's assume it's a complex expression and manually build the variable part
-                    
-                    // Start with the variable we already consumed
-                    let expr = crate::ast::Expr::Variable(name);
-                    
-                    // Let the expression parser handle any remaining parts (like array access, function calls, etc.)
-                    // But this is getting complex. Let me fall back to expression parsing for this case.
-                    
-                    // Actually, let's simplify: if it's not = or ++ or --, 
-                    // let's just treat it as a variable expression followed by semicolon
-                    Self::consume_semicolon(tokens, position)?;
-                    return Ok(crate::ast::Stmt::Expression(expr));
+                // Compound assignment += (currently only supporting '+=' pattern as Plus followed by Equals)
+                Some(Token::Plus) => {
+                    // Look ahead one more to see if '=' follows
+                    let mut la2 = la.clone();
+                    la2.next(); // consume Plus in lookahead
+                    if let Some(Token::Equals) = la2.peek() {
+                        // consume real variable, plus, equals
+                        super::utils::ParserUtils::next_token(tokens, position); // variable
+                        super::utils::ParserUtils::next_token(tokens, position); // plus
+                        super::utils::ParserUtils::next_token(tokens, position); // equals
+                        let rhs = super::expressions::ExpressionParser::parse_expression(tokens, position)?;
+                        // Build value = var + rhs
+                        let value_expr = Expr::Binary { left: Box::new(Expr::Variable(var_name.clone())), op: crate::ast::BinaryOp::Add, right: Box::new(rhs) };
+                        match tokens.peek() {
+                            Some(Token::Semicolon) => { super::utils::ParserUtils::next_token(tokens, position); }
+                            _ => { Self::consume_semicolon(tokens, position)?; }
+                        }
+                        return Ok(Stmt::Assignment { variable: var_name, value: value_expr });
+                    }
                 }
+                Some(Token::Dot) => {
+                    // Look ahead for '=' to form '.='
+                    let mut la2 = la.clone();
+                    la2.next();
+                    if let Some(Token::Equals) = la2.peek() {
+                        super::utils::ParserUtils::next_token(tokens, position); // variable
+                        super::utils::ParserUtils::next_token(tokens, position); // dot
+                        super::utils::ParserUtils::next_token(tokens, position); // equals
+                        let rhs = super::expressions::ExpressionParser::parse_expression(tokens, position)?;
+                        let value_expr = Expr::Binary { left: Box::new(Expr::Variable(var_name.clone())), op: crate::ast::BinaryOp::Concatenate, right: Box::new(rhs) };
+                        match tokens.peek() {
+                            Some(Token::Semicolon) => { super::utils::ParserUtils::next_token(tokens, position); }
+                            _ => { Self::consume_semicolon(tokens, position)?; }
+                        }
+                        return Ok(Stmt::Assignment { variable: var_name, value: value_expr });
+                    }
+                }
+                Some(Token::NullCoalescing) => {
+                    // Look ahead for '=' to detect '??='
+                    let mut la2 = la.clone();
+                    la2.next(); // consume NullCoalescing in lookahead
+                    if let Some(Token::Equals) = la2.peek() {
+                        // consume actual tokens
+                        super::utils::ParserUtils::next_token(tokens, position); // variable
+                        super::utils::ParserUtils::next_token(tokens, position); // '??'
+                        super::utils::ParserUtils::next_token(tokens, position); // '='
+                        let rhs = super::expressions::ExpressionParser::parse_expression(tokens, position)?;
+                        match tokens.peek() {
+                            Some(Token::Semicolon) => { super::utils::ParserUtils::next_token(tokens, position); }
+                            _ => { Self::consume_semicolon(tokens, position)?; }
+                        }
+                        return Ok(Stmt::NullCoalesceAssign { variable: var_name, value: rhs });
+                    }
+                }
+                _ => { /* fall through to generic expression parsing */ }
             }
         }
 
         // Not a variable token, parse as expression statement
         Self::parse_expression_statement(tokens, position)
+    }
+
+    /// Parse static variable declaration inside function: static $var = expr;
+    pub fn parse_static(
+        tokens: &mut Peekable<IntoIter<Token>>,
+        position: &mut usize,
+    ) -> ParseResult<Stmt> {
+        Self::consume_token(tokens, position, Token::Static)?;
+        let var_name = match super::utils::ParserUtils::next_token(tokens, position) {
+            Some(Token::Variable(n)) => n,
+            other => return Err(ParseError::ExpectedToken { expected: "variable".into(), found: format!("{:?}", other), position: *position })
+        };
+        let mut initial: Option<Expr> = None;
+        if let Some(Token::Equals) = tokens.peek() {
+            super::utils::ParserUtils::next_token(tokens, position); // '='
+            initial = Some(super::expressions::ExpressionParser::parse_expression(tokens, position)?);
+        }
+        Self::consume_semicolon(tokens, position)?;
+        Ok(Stmt::StaticVar { name: var_name, initial })
+    }
+
+    /// Attempt to parse a destructuring assignment; on failure, restore iterator state by returning error
+    fn try_parse_destructuring(
+        tokens: &mut Peekable<IntoIter<Token>>,
+        position: &mut usize,
+    ) -> ParseResult<Stmt> {
+        let start_pos = *position;
+        let mut clone = tokens.clone();
+        let mut clone_pos = start_pos;
+        // Consume '['
+        match super::utils::ParserUtils::next_token(&mut clone, &mut clone_pos) {
+            Some(Token::OpenBracket) => {}
+            _ => return Err(ParseError::InvalidStatement { message: "not destructuring".into() }),
+        }
+        let mut targets = Vec::new();
+    let expect_comma_or_close = false; // placeholder for future validation logic
+        loop {
+            match clone.peek() {
+                Some(Token::CloseBracket) => {
+                    super::utils::ParserUtils::next_token(&mut clone, &mut clone_pos); // consume ]
+                    break;
+                }
+                None => return Err(ParseError::UnexpectedEof),
+                _ => {
+                    if expect_comma_or_close {
+                        return Err(ParseError::InvalidStatement { message: "expected comma or ]".into() });
+                    }
+                    // Optional keyed form: String '=>' Variable
+                    let mut key: Option<String> = None;
+                    // Peek for string key
+                    if let Some(Token::String(s)) = clone.peek().cloned() {
+                        // Look ahead for =>
+                        let mut la = clone.clone();
+                        let _ = la.next(); // consume string in lookahead
+                        if let Some(Token::Arrow) = la.peek() {
+                            // consume string and => in real clone
+                            super::utils::ParserUtils::next_token(&mut clone, &mut clone_pos); // string
+                            super::utils::ParserUtils::next_token(&mut clone, &mut clone_pos); // =>
+                            key = Some(s);
+                        }
+                    }
+                    // Expect variable
+                    match super::utils::ParserUtils::next_token(&mut clone, &mut clone_pos) {
+                        Some(Token::Variable(var_name)) => {
+                            if let Some(k) = key { targets.push(DestructTarget::KeyVar(k, var_name)); } else { targets.push(DestructTarget::Var(var_name)); }
+                        }
+                        other => return Err(ParseError::ExpectedToken { expected: "variable".into(), found: format!("{:?}", other), position: clone_pos }),
+                    }
+                    // Comma or close
+                    match clone.peek() {
+                        Some(Token::Comma) => { super::utils::ParserUtils::next_token(&mut clone, &mut clone_pos); }
+                        Some(Token::CloseBracket) => {}
+                        _ => {}
+                    }
+                }
+            }
+        }
+        // Expect equals
+        match clone.peek() {
+            Some(Token::Equals) => { super::utils::ParserUtils::next_token(&mut clone, &mut clone_pos); }
+            _ => return Err(ParseError::InvalidStatement { message: "missing = after destructuring pattern".into() }),
+        }
+        // Commit: replace original iterator by consuming the same tokens
+        // Consume from original tokens now that we know it's destructuring
+        // Simpler: re-parse pattern on original tokens
+        // Consume '['
+        super::utils::ParserUtils::next_token(tokens, position);
+        let mut committed_targets = Vec::new();
+        loop {
+            if let Some(Token::CloseBracket) = tokens.peek() {
+                super::utils::ParserUtils::next_token(tokens, position); // ]
+                break;
+            }
+            let mut key: Option<String> = None;
+            if let Some(Token::String(s)) = tokens.peek().cloned() {
+                // lookahead for =>
+                let mut la = tokens.clone();
+                let _ = la.next();
+                if let Some(Token::Arrow) = la.peek() {
+                    super::utils::ParserUtils::next_token(tokens, position); // string
+                    super::utils::ParserUtils::next_token(tokens, position); // =>
+                    key = Some(s);
+                }
+            }
+            let var_name = match super::utils::ParserUtils::next_token(tokens, position) {
+                Some(Token::Variable(v)) => v,
+                other => return Err(ParseError::ExpectedToken { expected: "variable".into(), found: format!("{:?}", other), position: *position }),
+            };
+            committed_targets.push(if let Some(k) = key { DestructTarget::KeyVar(k, var_name) } else { DestructTarget::Var(var_name) });
+            if let Some(Token::Comma) = tokens.peek() { super::utils::ParserUtils::next_token(tokens, position); }
+        }
+        // '='
+        Self::consume_token(tokens, position, Token::Equals)?;
+        let value_expr = super::expressions::ExpressionParser::parse_expression(tokens, position)?;
+        Self::consume_semicolon(tokens, position)?;
+        Ok(Stmt::DestructuringAssignment { targets: committed_targets, value: value_expr })
     }
 
     /// Parse const statement
@@ -172,16 +366,45 @@ impl StatementParser {
             super::utils::ParserUtils::next_token(tokens, position); // consume ')'
         } else {
             loop {
-                // Parse parameter (expect $variable)
-                match super::utils::ParserUtils::next_token(tokens, position) {
-                    Some(Token::Variable(param_name)) => parameters.push(param_name),
-                    Some(token) => return Err(ParseError::ExpectedToken {
+                // Skip optional simple type hints (Identifier '|' Identifier ...)
+                loop {
+                    match tokens.peek() {
+                        Some(Token::Identifier(_)) => { super::utils::ParserUtils::next_token(tokens, position); }
+                        _ => break,
+                    }
+                    // Support union types: continue if next is pipe
+                    if let Some(Token::Pipe) = tokens.peek() {
+                        super::utils::ParserUtils::next_token(tokens, position); // consume pipe and loop
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                // Variadic ellipsis '...'
+                if let Some(Token::Ellipsis) = tokens.peek() {
+                    super::utils::ParserUtils::next_token(tokens, position); // consume ellipsis (ignored semantics)
+                }
+                // Optional by-reference '&'
+                if let Some(Token::Ampersand) = tokens.peek() {
+                    super::utils::ParserUtils::next_token(tokens, position); // consume '&'
+                }
+                // Now expect parameter variable
+                let param_name = match super::utils::ParserUtils::next_token(tokens, position) {
+                    Some(Token::Variable(name)) => name,
+                    Some(other) => return Err(ParseError::ExpectedToken {
                         expected: "parameter variable".to_string(),
-                        found: format!("{:?}", token),
+                        found: format!("{:?}", other),
                         position: *position,
                     }),
                     None => return Err(ParseError::UnexpectedEof),
+                };
+                // Optional default value assignment: = expr (ignored for now; just consume tokens)
+                if let Some(Token::Equals) = tokens.peek() {
+                    super::utils::ParserUtils::next_token(tokens, position); // consume '='
+                    // Parse and discard expression
+                    let _default_expr = super::expressions::ExpressionParser::parse_expression(tokens, position)?;
                 }
+                parameters.push(param_name);
 
                 // Check for more parameters or end
                 match tokens.peek() {
@@ -202,6 +425,24 @@ impl StatementParser {
         }
 
         // Parse function body (expect block statement)
+        // Optional return type hint: ':' type1 '|' type2 ... (skip for now)
+        if let Some(Token::Colon) = tokens.peek() {
+            super::utils::ParserUtils::next_token(tokens, position); // consume ':'
+            // Consume one or more identifiers separated by pipes
+            loop {
+                match tokens.peek() {
+                    Some(Token::Identifier(_)) => { super::utils::ParserUtils::next_token(tokens, position); }
+                    _ => break,
+                }
+                if let Some(Token::Pipe) = tokens.peek() {
+                    super::utils::ParserUtils::next_token(tokens, position); // consume '|'
+                    continue;
+                } else {
+                    break;
+                }
+            }
+        }
+
         Self::consume_token(tokens, position, Token::OpenBrace)?;
         let body = Self::parse_block_statements(tokens, position)?;
         Self::consume_token(tokens, position, Token::CloseBrace)?;

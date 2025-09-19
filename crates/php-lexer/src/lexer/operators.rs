@@ -32,13 +32,15 @@ impl OperatorHandler {
     /// Tokenize less than or less or equal
     pub fn tokenize_less_than(stream: &mut CharStream) -> LexResult<Token> {
         stream.next(); // consume '<'
-        
         if let Some(&'=') = stream.peek() {
             stream.next(); // consume '='
-            Ok(Token::LessOrEqual)
-        } else {
-            Ok(Token::LessThan)
+            if let Some(&'>') = stream.peek() {
+                stream.next(); // consume '>'
+                return Ok(Token::Spaceship);
+            }
+            return Ok(Token::LessOrEqual);
         }
+        Ok(Token::LessThan)
     }
 
     /// Tokenize greater than or greater or equal
