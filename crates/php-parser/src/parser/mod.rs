@@ -13,7 +13,7 @@ mod utils;
 mod tests;
 
 // Re-export the main parser struct and functions
-pub use main::{Parser, parse_legacy, LegacyNode, LegacyOperator};
+pub use main::{Parser};
 
 use crate::ast::Stmt;
 use crate::error::ParseResult;

@@ -49,17 +49,98 @@ RustyPHP is built as a multi-crate workspace, with each component having a speci
 
 ## 🚀 Quick Start
 
-### Current Status (Playground)
+### 🎮 Interactive Playground (Recommended)
 ```bash
 # Clone the repository
 git clone https://github.com/aminshamim/RustyPHP.git
 cd RustyPHP
 
-# Run the web playground (current implementation)
-cargo run
+# Launch the enhanced playground with Monaco Editor
+./rustyphp.sh
 
-# Visit http://127.0.0.1:8080
+# Or specify a custom port
+./rustyphp.sh --port 9090
+
+# Available options:
+# --release      # Use release build for better performance
+# --no-open      # Don't auto-open browser
+# --detach       # Run in background
+# --help         # Show all options
 ```
+
+**🌟 Features:**
+- **Monaco Editor** (VS Code editor) with PHP syntax highlighting
+- **Auto-completion** and IntelliSense suggestions
+- **Dark/Light themes** with smooth transitions
+- **Real-time execution** with performance metrics
+- **Split-panel layout** for code and output
+- **Keyboard shortcuts**: `Ctrl/Cmd+Enter` or `F5` to run code
+
+### 🖥️ Command Line Interface
+```bash
+# Run PHP files directly
+cargo run --bin php examples/basic.php
+
+# Or use the release build for better performance
+cargo build --release
+./target/release/php examples/basic.php
+```
+
+## 🎮 Playground Features
+
+### Advanced IDE Experience
+- **Monaco Editor**: The same editor that powers VS Code, providing a professional coding experience
+- **Syntax Highlighting**: Full PHP 8.x syntax support with error detection
+- **Auto-completion**: Intelligent suggestions for PHP functions, variables, and keywords
+- **Multiple Themes**: Dark, light, and high-contrast themes for comfortable coding
+- **Performance Metrics**: Real-time execution timing and memory usage display
+- **Keyboard Shortcuts**:
+  - `Ctrl/Cmd + Enter` or `F5`: Run code
+  - `Ctrl/Cmd + S`: Format code
+  - `F11`: Toggle fullscreen
+  - `Ctrl/Cmd + /`: Toggle comments
+
+### Example Code Snippets
+Try these examples in the playground:
+
+**Variables & Echo:**
+```php
+<?php
+$name = "RustyPHP";
+$version = 1.0;
+echo "Welcome to $name v$version!";
+?>
+```
+
+**Arithmetic Operations:**
+```php
+<?php
+$a = 10;
+$b = 5;
+echo "Addition: " . ($a + $b) . "\n";
+echo "Multiplication: " . ($a * $b) . "\n";
+echo "Complex: " . (2 + 3 * 4) . "\n"; // Correct precedence
+?>
+```
+
+**Control Flow:**
+```php
+<?php
+for ($i = 1; $i <= 5; $i++) {
+    if ($i % 2 == 0) {
+        echo "$i is even\n";
+    } else {
+        echo "$i is odd\n";
+    }
+}
+?>
+```
+
+### Troubleshooting
+- **Port 10101 already in use?** The script automatically kills conflicting processes
+- **Browser doesn't open?** Manually visit `http://localhost:10101`
+- **Performance issues?** Use `./rustyphp.sh --release` for optimized builds
+- **Need a different port?** Use `./rustyphp.sh --port YOUR_PORT`
 
 ### Setting Up New Architecture
 ```bash

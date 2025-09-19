@@ -7,15 +7,14 @@ fn test_basic_tokens() {
     let input = "<?php echo 'Hello World'; ?>";
     let tokens = lex(input).expect("Failed to lex input");
     
-    // Expected: PhpOpen, Echo, String, Semicolon, PhpClose, GreaterThan, EOF
-    assert_eq!(tokens.len(), 7);
+    // Expected: PhpOpen, Echo, String, Semicolon, PhpClose, EOF
+    assert_eq!(tokens.len(), 6);
     assert!(matches!(tokens[0], Token::PhpOpen));
     assert!(matches!(tokens[1], Token::Echo));
     assert!(matches!(tokens[2], Token::String(_)));
     assert!(matches!(tokens[3], Token::Semicolon));
     assert!(matches!(tokens[4], Token::PhpClose));
-    assert!(matches!(tokens[5], Token::GreaterThan));
-    assert!(matches!(tokens[6], Token::EOF));
+    assert!(matches!(tokens[5], Token::EOF));
 }
 
 #[test]
