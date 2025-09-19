@@ -1,0 +1,28 @@
+RustyPHP
+Copyright (c) 2025 Amin Shamim and Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this project except in compliance with the License.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+=== Project Notes ===
+RustyPHP is an independent, clean-room implementation of a PHP-compatible
+interpreter and runtime in Rust. It is NOT affiliated with, endorsed by, or
+sponsored by the PHP Group or the Zend Engine authors. "PHP" is a widely
+recognized mark of the PHP Group.
+
+The RustyPHP name and logo are project marks. See TRADEMARKS.md for permitted use.
+
+If this distribution includes third-party code in the future, the corresponding
+licenses and attributions will be added below.
+
+=== Third-Party Notices ===
+(None at this time)
