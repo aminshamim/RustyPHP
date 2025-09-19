@@ -7,9 +7,10 @@
 
 A complete PHP implementation in Rust, designed for performance, safety, and compatibility.
 
+> **Disclaimer**: RustyPHP is an independent clean‑room implementation and is **not affiliated with, endorsed by, or sponsored by** the PHP Group or the Zend Engine authors. "PHP" is a widely recognized mark of the PHP Group. See `TRADEMARKS.md` for brand usage guidelines.
+
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue.svg)](https://www.rust-lang.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0)
 
 ## 🎯 Vision
 
@@ -410,12 +411,11 @@ cargo run tests/php_files/basic.php
 
 ## 📄 License
 
-This project is dual-licensed under either:
+Licensed under the **Apache License, Version 2.0**. See `LICENSE-APACHE` for the full text.
 
-- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-- Apache License 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+Attribution & notices are collected in `NOTICE`. Prior commits may have referenced dual MIT/Apache intent; the canonical license moving forward is Apache 2.0 only.
 
-at your option.
+Trademark/branding rules: see `TRADEMARKS.md`.
 
 ## 🙏 Acknowledgments
 
