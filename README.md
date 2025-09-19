@@ -2,7 +2,7 @@
 # RustyPHP 🦀
 
 <div align="center">
-  <img src="assets/logo.jpeg" alt="RustyPHP Logo"/>
+  <img src="assets/logo.jpeg" alt="RustyPHP Banner with Logo" width="100%" />
 </div>
 
 A complete PHP implementation in Rust, designed for performance, safety, and compatibility.
