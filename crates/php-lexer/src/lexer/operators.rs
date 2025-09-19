@@ -92,4 +92,29 @@ impl OperatorHandler {
             Ok(Token::PhpClose) // Placeholder for now
         }
     }
+
+    /// Tokenize ampersand operators (& and &&)
+    pub fn tokenize_ampersand(stream: &mut CharStream) -> LexResult<Token> {
+        stream.next(); // consume '&'
+        
+        if let Some(&'&') = stream.peek() {
+            stream.next(); // consume second '&'
+            Ok(Token::LogicalAnd)
+        } else {
+            Ok(Token::Ampersand)
+        }
+    }
+
+    /// Tokenize pipe operators (| and ||)
+    pub fn tokenize_pipe(stream: &mut CharStream) -> LexResult<Token> {
+        stream.next(); // consume '|'
+        
+        if let Some(&'|') = stream.peek() {
+            stream.next(); // consume second '|'
+            Ok(Token::LogicalOr)
+        } else {
+            // Single pipe would be bitwise OR, but for now just treat as logical OR
+            Ok(Token::LogicalOr)
+        }
+    }
 }

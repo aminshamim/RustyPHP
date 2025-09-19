@@ -72,6 +72,9 @@ pub enum Token {
     Multiply,
     Divide,
     Dot,
+    Ampersand,
+    LogicalAnd,
+    LogicalOr,
     
     // Punctuation
     Semicolon,
@@ -105,7 +108,10 @@ impl Token {
     pub fn is_operator(&self) -> bool {
         matches!(self,
             Token::Equals | Token::Plus | Token::Minus | Token::Multiply |
-            Token::Divide | Token::Dot
+            Token::Divide | Token::Dot | Token::Ampersand | Token::LogicalAnd |
+            Token::LogicalOr | Token::DoubleEquals | Token::NotEquals |
+            Token::LessThan | Token::GreaterThan | Token::LessOrEqual |
+            Token::GreaterOrEqual
         )
     }
     
@@ -133,6 +139,15 @@ impl std::fmt::Display for Token {
             Token::Multiply => write!(f, "*"),
             Token::Divide => write!(f, "/"),
             Token::Dot => write!(f, "."),
+            Token::Ampersand => write!(f, "&"),
+            Token::LogicalAnd => write!(f, "&&"),
+            Token::LogicalOr => write!(f, "||"),
+            Token::DoubleEquals => write!(f, "=="),
+            Token::NotEquals => write!(f, "!="),
+            Token::LessThan => write!(f, "<"),
+            Token::GreaterThan => write!(f, ">"),
+            Token::LessOrEqual => write!(f, "<="),
+            Token::GreaterOrEqual => write!(f, ">="),
             Token::Semicolon => write!(f, ";"),
             Token::OpenParen => write!(f, "("),
             Token::CloseParen => write!(f, ")"),

@@ -115,6 +115,8 @@ impl<'a> Lexer<'a> {
             '=' => OperatorHandler::tokenize_equals(&mut self.stream),
             '>' => OperatorHandler::tokenize_greater_than(&mut self.stream),
             '!' => OperatorHandler::tokenize_not_equals(&mut self.stream),
+            '&' => OperatorHandler::tokenize_ampersand(&mut self.stream),
+            '|' => OperatorHandler::tokenize_pipe(&mut self.stream),
             
             // Single character tokens
             '+' => { self.stream.next(); Ok(Token::Plus) }
