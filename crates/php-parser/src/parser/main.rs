@@ -71,6 +71,8 @@ impl Parser {
             Some(Token::Echo) => StatementParser::parse_echo(tokens, position),
             Some(Token::Print) => StatementParser::parse_print(tokens, position),
             Some(Token::Variable(_)) => StatementParser::parse_assignment_or_expression(tokens, position),
+            Some(Token::OpenBracket) => StatementParser::parse_assignment_or_expression(tokens, position),
+            Some(Token::Static) => StatementParser::parse_static(tokens, position),
             Some(Token::Const) => StatementParser::parse_const(tokens, position),
             Some(Token::Function) => StatementParser::parse_function_definition(tokens, position),
             Some(Token::If) => ControlFlowParser::parse_if(tokens, position),
@@ -81,6 +83,8 @@ impl Parser {
             Some(Token::Break) => ControlFlowParser::parse_break(tokens, position),
             Some(Token::Continue) => ControlFlowParser::parse_continue(tokens, position),
             Some(Token::Switch) => ControlFlowParser::parse_switch(tokens, position),
+            Some(Token::Try) => ControlFlowParser::parse_try(tokens, position),
+            Some(Token::Declare) => StatementParser::parse_declare(tokens, position),
             Some(Token::OpenBrace) => Self::parse_block_statement(tokens, position),
             _ => StatementParser::parse_expression_statement(tokens, position),
         }

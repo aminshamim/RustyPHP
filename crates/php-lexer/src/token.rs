@@ -42,6 +42,9 @@ pub enum Token {
     Break,
     Continue,
     Do,
+    Declare,
+    Try,
+    Catch,
     
     // Built-in functions (will move to stdlib later)
     PrintR,
@@ -71,6 +74,8 @@ pub enum Token {
     GreaterThan,
     LessOrEqual,
     GreaterOrEqual,
+    /// Spaceship operator <=>
+    Spaceship,
     Plus,
     Minus,
     Multiply,
@@ -81,6 +86,20 @@ pub enum Token {
     NullCoalescing, // ??
     Increment, // ++
     Decrement, // --
+    /// Error suppression operator '@' (currently ignored by runtime)
+    At,
+    /// Ampersand '&' (reference / bitwise AND placeholder)
+    Ampersand,
+    /// Object operator '->'
+    ObjectOperator,
+    /// Pipe '|' for union types (currently skipped by parser)
+    Pipe,
+    /// Logical AND '&&'
+    LogicalAnd,
+    /// Logical OR '||'
+    LogicalOr,
+    /// Ellipsis '...' for variadics/spread (currently skipped by parser)
+    Ellipsis,
     
     // Punctuation
     Semicolon,
@@ -106,7 +125,8 @@ impl Token {
             Token::Public | Token::Private | Token::Protected | Token::Static |
             Token::Var | Token::Const | Token::True | Token::False | Token::Null |
             Token::Isset | Token::Empty | Token::Switch | Token::Case |
-            Token::Default | Token::Break | Token::Continue | Token::Do
+            Token::Default | Token::Break | Token::Continue | Token::Do |
+            Token::Try | Token::Catch
         )
     }
     
@@ -115,7 +135,8 @@ impl Token {
         matches!(self,
             Token::Equals | Token::Plus | Token::Minus | Token::Multiply |
             Token::Divide | Token::Dot | Token::Colon | Token::QuestionMark |
-            Token::NullCoalescing | Token::Arrow | Token::Increment | Token::Decrement
+            Token::NullCoalescing | Token::Arrow | Token::Increment | Token::Decrement |
+            Token::LogicalAnd | Token::LogicalOr | Token::Ampersand | Token::Pipe
         )
     }
     
@@ -149,6 +170,13 @@ impl std::fmt::Display for Token {
             Token::NullCoalescing => write!(f, "??"),
             Token::Increment => write!(f, "++"),
             Token::Decrement => write!(f, "--"),
+            Token::At => write!(f, "@"),
+            Token::Ampersand => write!(f, "&"),
+            Token::Pipe => write!(f, "|"),
+            Token::LogicalAnd => write!(f, "&&"),
+            Token::LogicalOr => write!(f, "||"),
+            Token::Ellipsis => write!(f, "..."),
+            Token::Declare => write!(f, "declare"),
             Token::Semicolon => write!(f, ";"),
             Token::OpenParen => write!(f, "("),
             Token::CloseParen => write!(f, ")"),

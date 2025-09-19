@@ -1,7 +1,7 @@
 //! PHP Runtime Engine
 
 use php_types::{PhpValue, PhpArrayKey, PhpArray};
-use php_parser::ast::{Stmt, Expr};
+use php_parser::ast::{Stmt, Expr, DestructTarget};
 use std::collections::HashMap;
 
 /// PHP execution context with variable scoping
@@ -72,6 +72,14 @@ impl ExecutionContext {
 pub struct Engine {
     /// Current execution context
     context: ExecutionContext,
+    /// Persistent storage for static variables per function
+    static_storage: std::collections::HashMap<String, std::collections::HashMap<String, PhpValue>>,
+    /// Stack tracking static vars declared in current function frame
+    static_var_stack: Vec<(String, Vec<String>)>,
+    /// Current function name if inside call
+    current_function: Option<String>,
+    /// Output buffering stack (top-of-stack is active buffer)
+    output_buffers: Vec<String>,
 }
 
 /// Internal control flow signal for break/continue/return
@@ -88,7 +96,12 @@ impl Engine {
         let mut ctx = ExecutionContext::new();
         // Initialize superglobals minimal
         ctx.set_variable("_GET".to_string(), PhpValue::Array(PhpArray::new()));
-        Self { context: ctx }
+        // Initialize commonly used JSON / filter constants (simplified integer values)
+        ctx.set_constant("JSON_UNESCAPED_SLASHES".to_string(), PhpValue::Int(1));
+        ctx.set_constant("JSON_UNESCAPED_UNICODE".to_string(), PhpValue::Int(2));
+        ctx.set_constant("JSON_THROW_ON_ERROR".to_string(), PhpValue::Int(4));
+        ctx.set_constant("FILTER_VALIDATE_INT".to_string(), PhpValue::Int(257));
+        Self { context: ctx, static_storage: std::collections::HashMap::new(), static_var_stack: Vec::new(), current_function: None, output_buffers: Vec::new() }
     }
 
     /// Execute a statement
@@ -98,7 +111,7 @@ impl Engine {
             ExecSignal::None => Ok(()),
             ExecSignal::Break | ExecSignal::Continue => Ok(()),
             ExecSignal::Return(val_opt) => {
-                if let Some(val) = val_opt { self.context.add_output(&val.to_string()); }
+                if let Some(val) = val_opt { self.write_output(&val.to_string()); }
                 Ok(())
             }
         }
@@ -112,17 +125,25 @@ impl Engine {
             }
             Stmt::Echo(expr) => {
                 let value = self.evaluate_expr(expr)?;
-                self.context.add_output(&value.to_string());
+                self.write_output(&value.to_string());
                 Ok(ExecSignal::None)
             }
             Stmt::Print(expr) => {
                 let value = self.evaluate_expr(expr)?;
-                self.context.add_output(&value.to_string());
+                self.write_output(&value.to_string());
                 Ok(ExecSignal::None)
             }
             Stmt::Assignment { variable, value } => {
                 let val = self.evaluate_expr(value)?;
                 self.context.set_variable(variable.clone(), val);
+                Ok(ExecSignal::None)
+            }
+            Stmt::NullCoalesceAssign { variable, value } => {
+                let current = self.context.get_variable(variable).cloned().unwrap_or(PhpValue::Null);
+                if current.is_null() {
+                    let new_val = self.evaluate_expr(value)?;
+                    self.context.set_variable(variable.clone(), new_val);
+                }
                 Ok(ExecSignal::None)
             }
             Stmt::ConstantDefinition { name, value } => {
@@ -288,6 +309,56 @@ impl Engine {
                 self.context.functions.insert(name.clone(), func);
                 Ok(ExecSignal::None)
             }
+            Stmt::StaticVar { name, initial } => {
+                if let Some(current_fn_name) = self.current_function.clone() {
+                    // Evaluate initial expression (no borrow of static_storage yet)
+                    let init_eval = if let Some(init_expr) = initial { 
+                        let cloned = init_expr.clone();
+                        Some(self.evaluate_expr(&cloned)?)
+                    } else { None };
+                    // Now borrow static_storage
+                    let entry = self.static_storage.entry(current_fn_name.clone()).or_insert_with(std::collections::HashMap::new);
+                    if !entry.contains_key(name) {
+                        entry.insert(name.clone(), init_eval.clone().unwrap_or(PhpValue::Null));
+                    }
+                    if let Some(val) = entry.get(name).cloned() { self.context.set_variable(name.clone(), val); }
+                    if let Some((fn_name, list)) = self.static_var_stack.last_mut() {
+                        if *fn_name == current_fn_name && !list.contains(name) { list.push(name.clone()); }
+                    }
+                }
+                Ok(ExecSignal::None)
+            }
+            Stmt::DestructuringAssignment { targets, value } => {
+                let array_val = self.evaluate_expr(value)?;
+                // Only handle array values; others ignored
+                if let PhpValue::Array(arr) = array_val {
+                    // Sequential index counter for plain vars
+                    let mut auto_index: i64 = 0;
+                    for target in targets {
+                        match target {
+                            DestructTarget::Var(var) => {
+                                let val = arr.get_int(auto_index).cloned().unwrap_or(PhpValue::Null);
+                                self.context.set_variable(var.clone(), val);
+                                auto_index += 1;
+                            }
+                            DestructTarget::KeyVar(key, var) => {
+                                let val = arr.get_string(&key).cloned().unwrap_or(PhpValue::Null);
+                                self.context.set_variable(var.clone(), val);
+                            }
+                        }
+                    }
+                }
+                Ok(ExecSignal::None)
+            }
+        }
+    }
+
+    /// Write output respecting active output buffer
+    fn write_output(&mut self, text: &str) {
+        if let Some(last) = self.output_buffers.last_mut() {
+            last.push_str(text);
+        } else {
+            self.context.add_output(text);
         }
     }
 
@@ -328,11 +399,72 @@ impl Engine {
                     BinaryOp::LessThanOrEqual => Ok(PhpValue::Bool(php_types::php_less_than_or_equal(&left_val, &right_val))),
                     BinaryOp::GreaterThan => Ok(PhpValue::Bool(php_types::php_greater_than(&left_val, &right_val))),
                     BinaryOp::GreaterThanOrEqual => Ok(PhpValue::Bool(php_types::php_greater_than_or_equal(&left_val, &right_val))),
+                    BinaryOp::Spaceship => {
+                        // Basic comparison: convert to numeric if both numeric else string cmp
+                        use std::cmp::Ordering;
+                        let ordering = match (&left_val, &right_val) {
+                            (PhpValue::Int(a), PhpValue::Int(b)) => a.cmp(b),
+                            (PhpValue::Float(a), PhpValue::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
+                            (PhpValue::Int(a), PhpValue::Float(b)) => (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal),
+                            (PhpValue::Float(a), PhpValue::Int(b)) => a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal),
+                            _ => left_val.to_string().cmp(&right_val.to_string()),
+                        };
+                        let res = match ordering { Ordering::Less => -1, Ordering::Equal => 0, Ordering::Greater => 1 };
+                        Ok(PhpValue::Int(res))
+                    }
+                    BinaryOp::BitwiseAnd => {
+                        let l = left_val.to_int();
+                        let r = right_val.to_int();
+                        Ok(PhpValue::Int(l & r))
+                    }
+                    BinaryOp::BitwiseOr => {
+                        let l = left_val.to_int();
+                        let r = right_val.to_int();
+                        Ok(PhpValue::Int(l | r))
+                    }
+                    BinaryOp::LogicalAnd => {
+                        Ok(PhpValue::Bool(left_val.is_truthy() && right_val.is_truthy()))
+                    }
+                    BinaryOp::LogicalOr => {
+                        Ok(PhpValue::Bool(left_val.is_truthy() || right_val.is_truthy()))
+                    }
                     _ => Err("Binary operator not implemented".to_string()),
                 }
             }
             Expr::FunctionCall { name, args } => {
                 self.call_function(name, args)
+            }
+            Expr::ArrowFunction { params, body } => {
+                // Represent closure as stored function with generated id
+                let id = format!("__closure_{}", self.context.functions.len());
+                let func = Function { params: params.clone(), body: Stmt::Return(Some(*body.clone())) }; // wrap expression in implicit return
+                self.context.functions.insert(id.clone(), func);
+                Ok(PhpValue::String(id)) // Temporary representation (string id). TODO: dedicated closure value type.
+            }
+            Expr::DynamicCall { target, args } => {
+                // Evaluate target to string id referencing stored closure
+                let target_val = self.evaluate_expr(target)?;
+                if let PhpValue::String(id) = target_val {
+                    // Look up stored function by id
+                    if let Some(func) = self.context.functions.get(&id).cloned() {
+                        if func.params.len() != args.len() { return Err(format!("Closure expects {} args, got {}", func.params.len(), args.len())); }
+                        let saved_vars = self.context.variables.clone();
+                        for (p, arg_expr) in func.params.iter().zip(args.iter()) {
+                            let val = self.evaluate_expr(arg_expr)?;
+                            self.context.set_variable(p.clone(), val);
+                        }
+                        let result = match self.exec(&func.body)? {
+                            ExecSignal::Return(v) => v.unwrap_or(PhpValue::Null),
+                            _ => PhpValue::Null,
+                        };
+                        self.context.variables = saved_vars;
+                        Ok(result)
+                    } else {
+                        Err("Undefined closure id".into())
+                    }
+                } else {
+                    Err("Attempted to call non-closure value".into())
+                }
             }
             Expr::Unary { op, operand } => {
                 use php_parser::ast::UnaryOp;
@@ -379,6 +511,30 @@ impl Engine {
                             Err("Decrement operator can only be applied to variables".to_string())
                         }
                     }
+                    UnaryOp::PreIncrement => {
+                        if let Expr::Variable(var_name) = operand.as_ref() {
+                            let current_val = self.context.get_variable(var_name).cloned().unwrap_or(PhpValue::Int(0));
+                            let new_val = match current_val {
+                                PhpValue::Int(i) => PhpValue::Int(i + 1),
+                                PhpValue::Float(f) => PhpValue::Float(f + 1.0),
+                                _ => PhpValue::Int(1),
+                            };
+                            self.context.set_variable(var_name.clone(), new_val.clone());
+                            Ok(new_val)
+                        } else { Err("Increment operator can only be applied to variables".to_string()) }
+                    }
+                    UnaryOp::PreDecrement => {
+                        if let Expr::Variable(var_name) = operand.as_ref() {
+                            let current_val = self.context.get_variable(var_name).cloned().unwrap_or(PhpValue::Int(0));
+                            let new_val = match current_val {
+                                PhpValue::Int(i) => PhpValue::Int(i - 1),
+                                PhpValue::Float(f) => PhpValue::Float(f - 1.0),
+                                _ => PhpValue::Int(-1),
+                            };
+                            self.context.set_variable(var_name.clone(), new_val.clone());
+                            Ok(new_val)
+                        } else { Err("Decrement operator can only be applied to variables".to_string()) }
+                    }
                     _ => Err("Unary operator not implemented".to_string()),
                 }
             }
@@ -419,7 +575,8 @@ impl Engine {
                         };
                         Ok(result.unwrap_or(PhpValue::Null))
                     }
-                    _ => Err("Attempt to access index of non-array value".to_string()),
+                    // PHP would emit a notice and return null; we silently return null for now
+                    _ => Ok(PhpValue::Null),
                 }
             }
             Expr::NullCoalesce { left, right } => {
@@ -429,6 +586,38 @@ impl Engine {
                 } else {
                     Ok(left_val)
                 }
+            }
+            Expr::Ternary { condition, then_expr, else_expr } => {
+                let cond_val = self.evaluate_expr(condition)?;
+                let is_truthy = cond_val.is_truthy();
+                if is_truthy {
+                    if let Some(then_e) = then_expr { self.evaluate_expr(then_e) } else { Ok(cond_val) }
+                } else {
+                    self.evaluate_expr(else_expr)
+                }
+            }
+            Expr::Match { subject, arms, default_arm } => {
+                let subj_val = self.evaluate_expr(subject)?;
+                for (conds, result) in arms {
+                    for cond in conds {
+                        let cval = self.evaluate_expr(cond)?;
+                        if php_types::php_equals(&subj_val, &cval) {
+                            return self.evaluate_expr(result);
+                        }
+                    }
+                }
+                if let Some(def) = default_arm { return self.evaluate_expr(def); }
+                Ok(PhpValue::Null)
+            }
+            Expr::Yield { value } => {
+                // Evaluate yielded value but ignore (no generator semantics yet)
+                let _ = self.evaluate_expr(value)?;
+                Ok(PhpValue::Null)
+            }
+            Expr::MethodCall { target: _target, method: _method, args } => {
+                // Evaluate args for side effects
+                for a in args { let _ = self.evaluate_expr(a)?; }
+                Ok(PhpValue::Null) // placeholder
             }
         }
     }
@@ -456,6 +645,352 @@ impl Engine {
                 // define() returns true on success
                 Ok(PhpValue::Bool(true))
             }
+            "isset" => {
+                // isset can take one or more variables/expressions. We'll evaluate each; if any is undefined or null -> false.
+                if args.is_empty() { return Ok(PhpValue::Bool(false)); }
+                for expr in args {
+                    // Only treat simple variable references as per minimal implementation; other expressions fallback to evaluated value
+                    let val = self.evaluate_expr(expr)?;
+                    if val.is_null() { return Ok(PhpValue::Bool(false)); }
+                }
+                Ok(PhpValue::Bool(true))
+            }
+            "parse_str" => {
+                // Expect 2 arguments: query string, target array variable (passed as variable expression in source)
+                if args.len() != 2 {
+                    return Err("parse_str() expects exactly 2 arguments".into());
+                }
+                // Evaluate first argument to string
+                let query_val = self.evaluate_expr(&args[0])?;
+                let query_str = query_val.to_string();
+                // Determine variable name from second arg expression (must be variable)
+                let target_var_name = match &args[1] {
+                    Expr::Variable(name) => name.clone(),
+                    _ => return Err("parse_str() second argument must be a variable".into()),
+                };
+                // Parse query string into PhpArray
+                let mut arr = PhpArray::new();
+                for pair in query_str.split('&') {
+                    if pair.is_empty() { continue; }
+                    let mut kv = pair.splitn(2, '=');
+                    let raw_key = kv.next().unwrap_or("");
+                    let raw_val = kv.next().unwrap_or("");
+                    let key = Self::percent_decode(raw_key);
+                    let val_str = Self::percent_decode(raw_val);
+                    arr.insert_string(key, PhpValue::String(val_str));
+                }
+                self.context.set_variable(target_var_name, PhpValue::Array(arr));
+                Ok(PhpValue::Null)
+            }
+            "array_merge" => {
+                if args.is_empty() { return Ok(PhpValue::Array(PhpArray::new())); }
+                let mut result = PhpArray::new();
+                for expr in args {
+                    let val = self.evaluate_expr(expr)?;
+                    if let PhpValue::Array(arr) = val {
+                        // For simplicity: numeric keys appended (preserving insertion order), string keys overwrite
+                        for (k, v) in arr.data.iter() {
+                            match k {
+                                PhpArrayKey::Int(_) => { result.push(v.clone()); }
+                                PhpArrayKey::String(s) => { result.insert_string(s.clone(), v.clone()); }
+                            }
+                        }
+                    }
+                }
+                Ok(PhpValue::Array(result))
+            }
+            "getenv" => {
+                if args.len() != 1 { return Err("getenv() expects exactly 1 argument".into()); }
+                let name_val = self.evaluate_expr(&args[0])?;
+                let key = name_val.to_string();
+                match std::env::var(&key) {
+                    Ok(v) => Ok(PhpValue::String(v)),
+                    Err(_) => Ok(PhpValue::Bool(false)),
+                }
+            }
+            "array_sum" => {
+                if args.len() != 1 { return Err("array_sum() expects exactly 1 argument".into()); }
+                let arr_val = self.evaluate_expr(&args[0])?;
+                match arr_val {
+                    PhpValue::Array(arr) => {
+                        let mut sum_f: f64 = 0.0;
+                        for (_, v) in arr.data.iter() {
+                            sum_f += match v {
+                                PhpValue::Int(i) => *i as f64,
+                                PhpValue::Float(f) => *f,
+                                PhpValue::String(s) => s.parse::<f64>().unwrap_or(0.0),
+                                PhpValue::Bool(b) => if *b { 1.0 } else { 0.0 },
+                                _ => 0.0,
+                            };
+                        }
+                        // If sum is integer representable, return Int else Float
+                        if (sum_f.fract() - 0.0).abs() < std::f64::EPSILON { Ok(PhpValue::Int(sum_f as i64)) } else { Ok(PhpValue::Float(sum_f)) }
+                    }
+                    _ => Ok(PhpValue::Int(0))
+                }
+            }
+            "str_repeat" => {
+                if args.len() != 2 { return Err("str_repeat() expects exactly 2 arguments".into()); }
+                let input_val = self.evaluate_expr(&args[0])?;
+                let times_val = self.evaluate_expr(&args[1])?;
+                let s = input_val.to_string();
+                let times: i64 = match times_val {
+                    PhpValue::Int(i) => i,
+                    PhpValue::Float(f) => f as i64,
+                    PhpValue::String(ref st) => st.parse::<i64>().unwrap_or(0),
+                    _ => 0,
+                };
+                if times <= 0 { return Ok(PhpValue::String(String::new())); }
+                // Basic guard to avoid huge allocations; mimic simplified behavior
+                if times as usize > 100_000 { return Err("str_repeat(): Second argument too large".into()); }
+                let repeated = s.repeat(times as usize);
+                Ok(PhpValue::String(repeated))
+            }
+            "usort" => {
+                if args.len() != 2 { return Err("usort() expects exactly 2 arguments".into()); }
+                use php_parser::ast::Expr as AstExpr;
+                let arr_expr = &args[0];
+                // Evaluate array
+                let arr_value = self.evaluate_expr(arr_expr)?;
+                if let PhpValue::Array(arr) = arr_value {
+                    // Extract values
+                    let mut values: Vec<PhpValue> = arr.data.iter().map(|(_, v)| v.clone()).collect();
+                    // Very naive sort: compare string representations (mimics comparator returning strcmp semantics)
+                    let len = values.len();
+                    for i in 0..len {
+                        for j in 0..len - 1 - i {
+                            let a_s = values[j].to_string();
+                            let b_s = values[j + 1].to_string();
+                            if a_s > b_s { values.swap(j, j + 1); }
+                        }
+                    }
+                    // Rebuild numeric array
+                    let mut new_arr = PhpArray::new();
+                    for v in values { new_arr.push(v); }
+                    if let AstExpr::Variable(var_name) = arr_expr { self.context.set_variable(var_name.clone(), PhpValue::Array(new_arr)); }
+                    Ok(PhpValue::Bool(true))
+                } else { Ok(PhpValue::Bool(false)) }
+            }
+            "iterator_to_array" => {
+                if args.len() < 1 { return Err("iterator_to_array() expects at least 1 argument".into()); }
+                let val = self.evaluate_expr(&args[0])?;
+                match val {
+                    PhpValue::Array(a) => Ok(PhpValue::Array(a)),
+                    _ => Ok(PhpValue::Array(PhpArray::new()))
+                }
+            }
+            "json_encode" => {
+                if args.is_empty() { return Err("json_encode() expects at least 1 argument".into()); }
+                let value = self.evaluate_expr(&args[0])?;
+                let mut flags: i64 = 0;
+                if args.len() >= 2 { flags = match self.evaluate_expr(&args[1])? { PhpValue::Int(i) => i, PhpValue::Float(f) => f as i64, _ => 0 }; }
+                let unescaped_slashes = (flags & 1) != 0; // using placeholder bit positions (not exact PHP mapping)
+                let unescaped_unicode = (flags & 2) != 0;
+                fn escape_str(s: &str, unesc_slash: bool, unesc_unicode: bool) -> String {
+                    let mut out = String::new();
+                    for ch in s.chars() {
+                        match ch {
+                            '"' => out.push_str("\\\""),
+                            '\\' => out.push_str("\\\\"),
+                            '/' => { if unesc_slash { out.push('/'); } else { out.push_str("\\/"); } },
+                            '\n' => out.push_str("\\n"),
+                            '\r' => out.push_str("\\r"),
+                            '\t' => out.push_str("\\t"),
+                            c if c < ' ' => {
+                                out.push_str(&format!("\\u{:04x}", c as u32));
+                            }
+                            c => {
+                                if !unesc_unicode && (c as u32) > 0x7F { out.push_str(&format!("\\u{:04x}", c as u32)); } else { out.push(c); }
+                            }
+                        }
+                    }
+                    out
+                }
+                fn encode(value: &PhpValue, unesc_slash: bool, unesc_unicode: bool) -> String {
+                    match value {
+                        PhpValue::Null => "null".to_string(),
+                        PhpValue::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
+                        PhpValue::Int(i) => i.to_string(),
+                        PhpValue::Float(f) => {
+                            if f.is_finite() { f.to_string() } else { "null".to_string() }
+                        }
+                        PhpValue::String(s) => format!("\"{}\"", escape_str(s, unesc_slash, unesc_unicode)),
+                        PhpValue::Array(arr) => {
+                            // Detect list: keys 0..n-1 all int sequential
+                            let mut is_list = true;
+                            let mut expected_index: i64 = 0;
+                            for (k, _) in arr.data.iter() {
+                                match k {
+                                    PhpArrayKey::Int(i) => { if *i != expected_index { is_list = false; break; } expected_index += 1; }
+                                    PhpArrayKey::String(_) => { is_list = false; break; }
+                                }
+                            }
+                            if is_list {
+                                let mut parts = Vec::new();
+                                for (_, v) in arr.data.iter() { parts.push(encode(v, unesc_slash, unesc_unicode)); }
+                                format!("[{}]", parts.join(","))
+                            } else {
+                                let mut parts = Vec::new();
+                                for (k, v) in arr.data.iter() {
+                                    let key_str = match k { PhpArrayKey::Int(i) => i.to_string(), PhpArrayKey::String(s) => s.clone() };
+                                    parts.push(format!("\"{}\":{}", escape_str(&key_str, unesc_slash, unesc_unicode), encode(v, unesc_slash, unesc_unicode)));
+                                }
+                                format!("{{{}}}", parts.join(","))
+                            }
+                        }
+                        _ => "null".to_string(),
+                    }
+                }
+                let json = encode(&value, unescaped_slashes, unescaped_unicode);
+                Ok(PhpValue::String(json))
+            }
+            "json_decode" => {
+                if args.is_empty() { return Err("json_decode() expects at least 1 argument".into()); }
+                let json_val = self.evaluate_expr(&args[0])?;
+                let json_str = json_val.to_string();
+                // second param assoc = bool (default true for us for simpler mapping)
+                let mut assoc = true;
+                if args.len() >= 2 {
+                    assoc = match self.evaluate_expr(&args[1])? { PhpValue::Bool(b) => b, PhpValue::Int(i) => i != 0, _ => true };
+                }
+                match serde_json::from_str::<serde_json::Value>(&json_str) {
+                    Ok(v) => {
+                        fn to_php(v: &serde_json::Value, assoc: bool) -> PhpValue {
+                            match v {
+                                serde_json::Value::Null => PhpValue::Null,
+                                serde_json::Value::Bool(b) => PhpValue::Bool(*b),
+                                serde_json::Value::Number(n) => {
+                                    if let Some(i) = n.as_i64() { PhpValue::Int(i) } else if let Some(f) = n.as_f64() { PhpValue::Float(f) } else { PhpValue::Null }
+                                }
+                                serde_json::Value::String(s) => PhpValue::String(s.clone()),
+                                serde_json::Value::Array(arr) => {
+                                    let mut a = PhpArray::new();
+                                    for item in arr { a.push(to_php(item, assoc)); }
+                                    PhpValue::Array(a)
+                                }
+                                serde_json::Value::Object(map) => {
+                                    let mut a = PhpArray::new();
+                                    for (k, val) in map.iter() {
+                                        if assoc {
+                                            a.insert_string(k.clone(), to_php(val, assoc));
+                                        }
+                                    }
+                                    PhpValue::Array(a)
+                                }
+                            }
+                        }
+                        Ok(to_php(&v, assoc))
+                    }
+                    Err(_) => Ok(PhpValue::Null)
+                }
+            }
+            "set_error_handler" => {
+                // Accept any callable, ignore for now, return null (previous handler)
+                Ok(PhpValue::Null)
+            }
+            "preg_match" => {
+                // preg_match(pattern, subject, matches?)
+                if args.len() < 2 { return Err("preg_match() expects at least 2 parameters".into()); }
+                use php_parser::ast::Expr as AstExpr;
+                let pattern_raw = self.evaluate_expr(&args[0])?.to_string();
+                let subject = self.evaluate_expr(&args[1])?.to_string();
+                // Strip delimiters if pattern like /.../
+                let pattern = if pattern_raw.len() >= 2 && pattern_raw.starts_with('/') {
+                    if let Some(last) = pattern_raw.rfind('/') { pattern_raw[1..last].to_string() } else { pattern_raw.clone() }
+                } else { pattern_raw.clone() };
+                match regex::Regex::new(&pattern) {
+                    Ok(re) => {
+                        if let Some(caps) = re.captures(&subject) {
+                            // If third argument variable provided populate
+                            if args.len() >= 3 {
+                                if let AstExpr::Variable(var_name) = &args[2] {
+                                    let mut arr = PhpArray::new();
+                                    for (i, cap) in caps.iter().enumerate() {
+                                        if let Some(m) = cap { arr.insert_int(i as i64, PhpValue::String(m.as_str().to_string())); }
+                                    }
+                                    self.context.set_variable(var_name.clone(), PhpValue::Array(arr));
+                                }
+                            }
+                            Ok(PhpValue::Int(1))
+                        } else { Ok(PhpValue::Int(0)) }
+                    }
+                    Err(_) => Ok(PhpValue::Int(0))
+                }
+            }
+            "filter_var" => {
+                // filter_var(value, filter) minimal: only FILTER_VALIDATE_INT
+                if args.len() < 2 { return Err("filter_var() expects at least 2 arguments".into()); }
+                let val = self.evaluate_expr(&args[0])?;
+                let filter = self.evaluate_expr(&args[1])?;
+                let filter_id = match filter { PhpValue::Int(i) => i, _ => 0 };
+                // We defined FILTER_VALIDATE_INT constant as 257
+                if filter_id == 257 {
+                    let s = val.to_string();
+                    if let Ok(i) = s.parse::<i64>() { Ok(PhpValue::Int(i)) } else { Ok(PhpValue::Bool(false)) }
+                } else {
+                    Ok(val) // fallback returns original
+                }
+            }
+            "ob_start" => {
+                self.output_buffers.push(String::new());
+                Ok(PhpValue::Bool(true))
+            }
+            "ob_get_clean" => {
+                if let Some(buf) = self.output_buffers.pop() { Ok(PhpValue::String(buf)) } else { Ok(PhpValue::Bool(false)) }
+            }
+            "printf" => {
+                if args.is_empty() { return Ok(PhpValue::Int(0)); }
+                let fmt = self.evaluate_expr(&args[0])?.to_string();
+                let mut arg_index = 1usize;
+                let mut out = String::new();
+                let chars: Vec<char> = fmt.chars().collect();
+                let mut i = 0;
+                while i < chars.len() {
+                    if chars[i] == '%' {
+                        i += 1;
+                        if i >= chars.len() { break; }
+                        let spec = chars[i];
+                        match spec {
+                            '%' => { out.push('%'); }
+                            's' | 'd' | 'f' => {
+                                if arg_index < args.len() {
+                                    let val = self.evaluate_expr(&args[arg_index])?;
+                                    let formatted = match spec {
+                                        'd' => val.to_int().to_string(),
+                                        'f' => {
+                                            let f = val.to_float();
+                                            format!("{}", f)
+                                        }
+                                        _ => val.to_string(),
+                                    };
+                                    out.push_str(&formatted);
+                                    arg_index += 1;
+                                }
+                            }
+                            _ => { out.push('%'); out.push(spec); }
+                        }
+                    } else {
+                        out.push(chars[i]);
+                    }
+                    i += 1;
+                }
+                let len = out.len() as i64;
+                self.write_output(&out);
+                Ok(PhpValue::Int(len))
+            }
+            "implode" => {
+                if args.is_empty() { return Err("implode() expects at least 1 argument".into()); }
+                let (glue, pieces_expr_index) = if args.len() == 1 { ("".to_string(), 0usize) } else { (self.evaluate_expr(&args[0])?.to_string(), 1usize) };
+                let pieces_val = self.evaluate_expr(&args[pieces_expr_index])?;
+                match pieces_val {
+                    PhpValue::Array(arr) => {
+                        let mut parts = Vec::new();
+                        for (_, v) in arr.data.iter() { parts.push(v.to_string()); }
+                        Ok(PhpValue::String(parts.join(&glue)))
+                    }
+                    other => Ok(PhpValue::String(other.to_string()))
+                }
+            }
             _ => {
                 // User-defined function?
                 if let Some(func) = self.context.functions.get(name).cloned() {
@@ -465,6 +1000,9 @@ impl Engine {
                     }
                     // Save current variables (shallow)
                     let saved_vars = self.context.variables.clone();
+                    let prev_function = self.current_function.clone();
+                    self.current_function = Some(name.to_string());
+                    self.static_var_stack.push((name.to_string(), Vec::new()));
                     // Bind parameters
                     for (param, expr) in func.params.iter().zip(args.iter()) {
                         let val = self.evaluate_expr(expr)?;
@@ -475,6 +1013,17 @@ impl Engine {
                         ExecSignal::Return(v) => v.unwrap_or(PhpValue::Null),
                         _ => PhpValue::Null,
                     };
+                    // Persist static vars back
+                    if let Some((fn_name, vars)) = self.static_var_stack.pop() {
+                        if let Some(store) = self.static_storage.get_mut(&fn_name) {
+                            for var in vars {
+                                if let Some(val) = self.context.get_variable(&var).cloned() {
+                                    store.insert(var, val);
+                                }
+                            }
+                        }
+                    }
+                    self.current_function = prev_function;
                     // Restore variables (simple approach - constants/functions persist)
                     self.context.variables = saved_vars;
                     Ok(result)
@@ -483,6 +1032,35 @@ impl Engine {
                 }
             }
         }
+    }
+
+    /// Simple percent-decoding helper (handles + -> space and %XX hex sequences)
+    fn percent_decode(input: &str) -> String {
+        let mut bytes = Vec::with_capacity(input.len());
+        let mut chars = input.as_bytes().iter().cloned().peekable();
+        while let Some(b) = chars.next() {
+            match b {
+                b'+' => bytes.push(b' '),
+                b'%' => {
+                    let h1 = chars.next();
+                    let h2 = chars.next();
+                    if let (Some(c1), Some(c2)) = (h1, h2) {
+                        let hex = [c1, c2];
+                        if let Ok(s) = std::str::from_utf8(&hex) {
+                            if let Ok(v) = u8::from_str_radix(s, 16) { bytes.push(v); continue; }
+                        }
+                        // Fallback: push literal
+                        bytes.push(b'%'); bytes.push(c1); bytes.push(c2);
+                    } else {
+                        bytes.push(b'%');
+                        if let Some(c1) = h1 { bytes.push(c1); }
+                        if let Some(c2) = h2 { bytes.push(c2); }
+                    }
+                }
+                _ => bytes.push(b),
+            }
+        }
+        String::from_utf8_lossy(&bytes).into_owned()
     }
 
     /// Get execution output

@@ -19,6 +19,14 @@ pub enum Stmt {
         /// Value expression
         value: Expr,
     },
+    /// Null coalescing assignment: $var ??= expr;
+    /// Assigns expr to $var only if the current value is null.
+    NullCoalesceAssign {
+        /// Variable name
+        variable: String,
+        /// Value expression (RHS)
+        value: Expr,
+    },
     /// Constant definition: const NAME = value; or define('NAME', value);
     ConstantDefinition {
         /// Constant name
@@ -90,6 +98,20 @@ pub enum Stmt {
         /// Optional default block
         default: Option<Vec<Stmt>>,
     },
+    /// Array destructuring assignment: [ $a, $b ] = expr; or ['key' => $v] = expr;
+    DestructuringAssignment {
+        /// Destructuring targets
+        targets: Vec<DestructTarget>,
+        /// Value expression supplying array
+        value: Expr,
+    },
+    /// Static variable declaration inside a function: static $var = expr;
+    StaticVar {
+        /// Variable name
+        name: String,
+        /// Optional initialization expression
+        initial: Option<Expr>,
+    },
 }
 
 /// Single switch case
@@ -108,6 +130,7 @@ impl fmt::Display for Stmt {
             Stmt::Echo(expr) => write!(f, "echo {};", expr),
             Stmt::Print(expr) => write!(f, "print {};", expr),
             Stmt::Assignment { variable, value } => write!(f, "${} = {};", variable, value),
+            Stmt::NullCoalesceAssign { variable, value } => write!(f, "${} ??= {};", variable, value),
             Stmt::ConstantDefinition { name, value } => write!(f, "const {} = {};", name, value),
             Stmt::Block(stmts) => {
                 writeln!(f, "{{")?;
@@ -173,6 +196,29 @@ impl fmt::Display for Stmt {
                 }
                 write!(f, "}}")
             }
+            Stmt::DestructuringAssignment { targets, value } => {
+                write!(f, "[")?;
+                for (i, t) in targets.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    match t {
+                        DestructTarget::Var(v) => write!(f, "${}", v)?,
+                        DestructTarget::KeyVar(k, v) => write!(f, "'{}' => ${}", k, v)?,
+                    }
+                }
+                write!(f, "] = {};", value)
+            }
+            Stmt::StaticVar { name, initial } => {
+                if let Some(init) = initial { write!(f, "static ${} = {};", name, init) } else { write!(f, "static ${};", name) }
+            }
         }
     }
+}
+
+/// A single destructuring target entry
+#[derive(Debug, Clone, PartialEq)]
+pub enum DestructTarget {
+    /// Plain variable target
+    Var(String),
+    /// Keyed target 'key' => $var
+    KeyVar(String, String),
 }

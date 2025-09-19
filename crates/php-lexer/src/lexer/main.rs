@@ -96,6 +96,9 @@ impl<'a> Lexer<'a> {
                 // Check if it's <?php
                 if self.stream.peek_ahead(5) == "<?php" {
                     OperatorHandler::try_php_open(&mut self.stream)
+                } else if self.stream.peek_ahead(3) == "<<<" {
+                    // Heredoc / Nowdoc string
+                    LiteralHandler::tokenize_heredoc(&mut self.stream)
                 } else {
                     OperatorHandler::tokenize_less_than(&mut self.stream)
                 }
@@ -115,6 +118,17 @@ impl<'a> Lexer<'a> {
             '=' => OperatorHandler::tokenize_equals(&mut self.stream),
             '>' => OperatorHandler::tokenize_greater_than(&mut self.stream),
             '!' => OperatorHandler::tokenize_not_equals(&mut self.stream),
+            '@' => { self.stream.next(); Ok(Token::At) }
+            '&' => {
+                if self.stream.peek_ahead(2).starts_with("&&") {
+                    self.stream.next(); // &
+                    self.stream.next(); // &
+                    Ok(Token::LogicalAnd)
+                } else {
+                    self.stream.next();
+                    Ok(Token::Ampersand)
+                }
+            }
             
             // Single character tokens with potential multi-character variants
             '+' => {
@@ -127,6 +141,12 @@ impl<'a> Lexer<'a> {
                 }
             }
             '-' => {
+                // Check object operator '->'
+                if self.stream.peek_ahead(2) == "->" {
+                    self.stream.next(); // '-'
+                    self.stream.next(); // '>'
+                    return Ok(Token::ObjectOperator);
+                }
                 self.stream.next(); // consume '-'
                 if let Some(&'-') = self.stream.peek() {
                     self.stream.next(); // consume second '-'
@@ -136,10 +156,48 @@ impl<'a> Lexer<'a> {
                 }
             }
             '*' => { self.stream.next(); Ok(Token::Multiply) }
-            '/' => { 
-                // This should only be reached if it's not a comment
-                self.stream.next(); 
-                Ok(Token::Divide) 
+            '|' => {
+                if self.stream.peek_ahead(2).starts_with("||") {
+                    self.stream.next(); // |
+                    self.stream.next(); // |
+                    Ok(Token::LogicalOr)
+                } else {
+                    self.stream.next();
+                    Ok(Token::Pipe)
+                }
+            }
+            '/' => {
+                // Heuristic regex literal: /.../  (only when second char looks regex-like)
+                // We don't support flags or complex delimiters yet; if heuristic fails treat as division.
+                let look = self.stream.peek_ahead(2); // includes '/' plus potential first body char
+                let chars: Vec<char> = look.chars().collect();
+                if chars.len() >= 2 {
+                    let first_body = chars[1];
+                    let starters = "^.[(\\*+{"; // broad set of likely regex starts
+                    if starters.contains(first_body) {
+                        // Consume opening '/'
+                        self.stream.next();
+                        let mut pattern = String::from("/");
+                        let mut escaped = false;
+                        while let Some(ch) = self.stream.next() {
+                            pattern.push(ch);
+                            if escaped { escaped = false; continue; }
+                            if ch == '\\' { escaped = true; continue; }
+                            if ch == '/' { break; }
+                        }
+                        return Ok(Token::String(pattern));
+                    }
+                }
+                // Fallback: treat as divide operator
+                self.stream.next();
+                Ok(Token::Divide)
+            }
+            // Ellipsis '...' must be checked before single '.'
+            '.' if self.stream.peek_ahead(3) == "..." => {
+                self.stream.next(); // '.'
+                self.stream.next(); // '.'
+                self.stream.next(); // '.'
+                Ok(Token::Ellipsis)
             }
             '.' => { self.stream.next(); Ok(Token::Dot) }
             ':' => OperatorHandler::tokenize_colon(&mut self.stream),

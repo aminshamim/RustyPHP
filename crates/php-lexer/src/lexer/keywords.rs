@@ -48,6 +48,9 @@ impl KeywordHandler {
         keywords.insert("break", Token::Break);
         keywords.insert("continue", Token::Continue);
         keywords.insert("do", Token::Do);
+    keywords.insert("declare", Token::Declare);
+        keywords.insert("try", Token::Try);
+        keywords.insert("catch", Token::Catch);
         
         // Built-in functions
         keywords.insert("print_r", Token::PrintR);
