@@ -11,6 +11,7 @@ A complete PHP implementation in Rust, designed for performance, safety, and com
 
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue.svg)](https://www.rust-lang.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0)
+[![Financial Contributors on Open Collective](https://opencollective.com/rustyphp/all/badge.svg?label=financial+contributors)](https://opencollective.com/rustyphp)
 
 ## 🎯 Vision
 
